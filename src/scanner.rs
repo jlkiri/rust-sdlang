@@ -9,6 +9,7 @@ pub enum Token {
     Unknown,
     True,
     False,
+    String(usize, usize),
     Null,
     On,
     Off,
@@ -83,22 +84,12 @@ impl<'a> Scanner<'a> {
         let (start, end) = self.range();
 
         match ch {
-            't' if  self.try_keyword(start, end, 3, "rue") => {
-                Token::True
-            },
-            'f' if self.try_keyword(start, end, 4, "alse") => {
-                Token::False
-            },
-            'n' if self.try_keyword(start, end, 3, "ull") => {
-                Token::Null
-            },
-            'o' if end - start > 1 && self.try_keyword(start, end, 1, "n") => {
-                Token::On
-            },
-            'o' if end - start > 1 && self.try_keyword(start, end, 2, "ff") => {
-                Token::Off
-            }
-            _ => Token::Node(start, end)
+            't' if self.try_keyword(start, end, 3, "rue") => Token::True,
+            'f' if self.try_keyword(start, end, 4, "alse") => Token::False,
+            'n' if self.try_keyword(start, end, 3, "ull") => Token::Null,
+            'o' if end - start > 1 && self.try_keyword(start, end, 1, "n") => Token::On,
+            'o' if end - start > 1 && self.try_keyword(start, end, 2, "ff") => Token::Off,
+            _ => Token::Node(start, end),
         }
     }
     fn word(&mut self) -> Token {
@@ -133,7 +124,7 @@ impl<'a> Scanner<'a> {
             _ => false,
         }
     }
-    fn is_alpha(&self,chr: Option<Char> ) -> bool {
+    fn is_alpha(&self, chr: Option<Char>) -> bool {
         if let Some((_, ch)) = chr {
             return ch.is_ascii_alphabetic();
         }
@@ -194,6 +185,21 @@ impl<'a> Scanner<'a> {
             _ => Token::Number(start, end),
         }
     }
+    fn string(&mut self) -> Token {
+        while let Some((_, ch)) = self.peek() {
+            if ch == '"' {
+                break;
+            }
+            
+            self.advance();
+        }
+
+        self.advance();
+
+        let (start, end) = self.range();
+
+        Token::String(start + 1, end - 1)
+    }
     pub fn scan_token(&mut self) -> Option<Token> {
         self.skip_whitespace();
 
@@ -209,9 +215,14 @@ impl<'a> Scanner<'a> {
                     return Some(self.number());
                 }
 
-                println!("Unknown char: {:#?}", ch);
+                match ch {
+                    '"' => Some(self.string()),
+                    _ => {
+                        println!("Unknown char: {:#?}", ch);
 
-                Some(Token::Unknown)
+                        Some(Token::Unknown)
+                    }
+                }
             }
             None => None,
         }
