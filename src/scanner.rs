@@ -12,6 +12,7 @@ pub enum Token {
     Null,
     On,
     Off,
+    BinaryDecimal(usize, usize),
     Node(usize, usize),
     Number(usize, usize),
     Float64(usize, usize),
@@ -51,7 +52,7 @@ impl<'a> Scanner<'a> {
     fn skip_whitespace(&mut self) {
         while let Some((_, ch)) = self.peek() {
             match ch {
-                ' ' | '\r' | '\t' | '\\' => {
+                ' ' | '\r' | '\t' | '\\' | '\n' => {
                     self.advance();
                 }
                 '/' => match self.peek_next() {
@@ -75,11 +76,6 @@ impl<'a> Scanner<'a> {
     }
     fn try_keyword(&self, start: usize, end: usize, len: usize, rest: &str) -> bool {
         let source_rest = &self.source[start + 1..start + 1 + len];
-
-        println!("{}", rest);
-        println!("{}", source_rest);
-        println!("{}", end - start);
-
         end - start == len + 1 && source_rest == rest
     }
     fn check_keyword(&self) -> Token {
@@ -116,7 +112,7 @@ impl<'a> Scanner<'a> {
         let (start, _) = self.start.unwrap();
         let end = match self.current {
             Some((index, _)) => index,
-            None => self.source.len() - 1,
+            None => self.source.len(),
         };
 
         (start, end)
@@ -163,7 +159,7 @@ impl<'a> Scanner<'a> {
         match self.peek() {
             Some((_, '.')) => {
                 if let Some((_, next)) = self.peek_next() {
-                    if next.is_digit(10) {
+                    if (*next).is_digit(10) {
                         self.advance();
                     }
 
@@ -181,11 +177,12 @@ impl<'a> Scanner<'a> {
                         return Token::Float32(start, end + 1);
                     }
 
-                    if self.match_char('B') {
+                    if let Some(ch) = self.peek().map(|(_, c)| c) {
                         match self.peek_next().map(|(_, c)| c) {
-                            Some(next) if next == &'D' => {
+                            Some(next) if ch == 'B' && next == &'D' => {
                                 self.advance();
-                                return Token::Float64(start, end + 2);
+                                self.advance();
+                                return Token::BinaryDecimal(start, end + 1);
                             }
                             _ => (),
                         }
@@ -211,6 +208,8 @@ impl<'a> Scanner<'a> {
                 if ch.is_digit(10) {
                     return Some(self.number());
                 }
+
+                println!("Unknown char: {:#?}", ch);
 
                 Some(Token::Unknown)
             }

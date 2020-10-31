@@ -4,7 +4,11 @@ use scanner::Scanner;
 use scanner::Token;
 
 fn main() {
-    let source = "123.5f null false on off null";
+    let source = "
+        age 34
+        temperature 36
+        height 180
+    ";
     let mut scanner = Scanner::new(source);
     let mut tokens: Vec<Token> = Vec::new();
 
