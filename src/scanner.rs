@@ -7,6 +7,11 @@ type Char = (Index, char);
 #[derive(Debug)]
 pub enum Token {
     Unknown,
+    True,
+    False,
+    Null,
+    On,
+    Off,
     Node(usize, usize),
     Number(usize, usize),
     Float64(usize, usize),
@@ -68,19 +73,44 @@ impl<'a> Scanner<'a> {
             }
         }
     }
-    fn node(&mut self) -> Token {
-        while !self.is_at_end() {
-            let (_, ch) = self.current.unwrap();
-            if ch.is_ascii_alphabetic() || ch.is_digit(10) {
-                self.advance();
-            } else {
-                break;
-            }
-        }
+    fn try_keyword(&self, start: usize, end: usize, len: usize, rest: &str) -> bool {
+        let source_rest = &self.source[start + 1..start + 1 + len];
 
+        println!("{}", rest);
+        println!("{}", source_rest);
+        println!("{}", end - start);
+
+        end - start == len + 1 && source_rest == rest
+    }
+    fn check_keyword(&self) -> Token {
+        let (_, ch) = self.start.unwrap();
         let (start, end) = self.range();
 
-        Token::Node(start, end)
+        match ch {
+            't' if  self.try_keyword(start, end, 3, "rue") => {
+                Token::True
+            },
+            'f' if self.try_keyword(start, end, 4, "alse") => {
+                Token::False
+            },
+            'n' if self.try_keyword(start, end, 3, "ull") => {
+                Token::Null
+            },
+            'o' if end - start > 1 && self.try_keyword(start, end, 1, "n") => {
+                Token::On
+            },
+            'o' if end - start > 1 && self.try_keyword(start, end, 2, "ff") => {
+                Token::Off
+            }
+            _ => Token::Node(start, end)
+        }
+    }
+    fn word(&mut self) -> Token {
+        while self.is_alpha(self.peek()) || self.is_digit(self.peek()) {
+            self.advance();
+        }
+
+        self.check_keyword()
     }
     fn range(&self) -> (usize, usize) {
         let (start, _) = self.start.unwrap();
@@ -106,6 +136,12 @@ impl<'a> Scanner<'a> {
             None => true,
             _ => false,
         }
+    }
+    fn is_alpha(&self,chr: Option<Char> ) -> bool {
+        if let Some((_, ch)) = chr {
+            return ch.is_ascii_alphabetic();
+        }
+        false
     }
     fn is_digit(&self, chr: Option<Char>) -> bool {
         if let Some((_, ch)) = chr {
@@ -169,7 +205,7 @@ impl<'a> Scanner<'a> {
         match self.advance() {
             Some((_, ch)) => {
                 if ch.is_ascii_alphabetic() {
-                    return Some(self.node());
+                    return Some(self.word());
                 }
 
                 if ch.is_digit(10) {

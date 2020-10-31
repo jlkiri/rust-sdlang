@@ -4,7 +4,7 @@ use scanner::Scanner;
 use scanner::Token;
 
 fn main() {
-    let source = "123.5f def";
+    let source = "123.5f null false on off null";
     let mut scanner = Scanner::new(source);
     let mut tokens: Vec<Token> = Vec::new();
 
@@ -12,7 +12,7 @@ fn main() {
         tokens.push(token);
     }
 
-    println!("{}", tokens.len());
+    // println!("{}", tokens.len());
 
     for t in tokens.iter() {
         println!("{:#?}", t);
