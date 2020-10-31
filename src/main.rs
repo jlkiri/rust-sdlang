@@ -1,12 +1,12 @@
 mod scanner;
 
 use scanner::Scanner;
-use scanner::TokenType;
+use scanner::Token;
 
 fn main() {
-    let source = "abcdefg  // werefwef\n  hijklmnop";
+    let source = "123.5f def";
     let mut scanner = Scanner::new(source);
-    let mut tokens: Vec<TokenType> = Vec::new();
+    let mut tokens: Vec<Token> = Vec::new();
 
     while let Some(token) = scanner.scan_token() {
         tokens.push(token);
