@@ -5,5 +5,5 @@
 ## Status
 
 - [x] Scanner
-- [] Parser
+- [ ] Parser
 
