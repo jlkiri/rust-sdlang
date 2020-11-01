@@ -4,9 +4,8 @@ use std::str::CharIndices;
 type Index = usize;
 type Char = (Index, char);
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Token {
-    Unknown,
     True,
     False,
     Error(String),
@@ -14,6 +13,7 @@ pub enum Token {
     Null,
     On,
     Off,
+    Float64Double(usize, usize),
     Date(usize, usize),
     Decimal128(usize, usize),
     Node(usize, usize),
@@ -77,16 +77,14 @@ impl<'a> Scanner<'a> {
                     }
                     None => return,
                 },
-                '#' => {
-                    loop {
-                        match self.peek() {
-                            Some((_, ch)) if ch != '\n' => {
-                                self.advance();
-                            }
-                            _ => break,
+                '#' => loop {
+                    match self.peek() {
+                        Some((_, ch)) if ch != '\n' => {
+                            self.advance();
                         }
+                        _ => break,
                     }
-                }
+                },
                 _ => return,
             }
         }
@@ -177,66 +175,68 @@ impl<'a> Scanner<'a> {
                 if let Some((_, next)) = self.peek_next() {
                     if (*next).is_digit(10) {
                         self.advance();
-                    }
 
-                    while self.is_digit(self.peek()) {
-                        self.advance();
-                    }
-
-                    let (start, end) = self.range();
-
-                    if self.match_char('d') {
-                        return Token::Float64(start, end + 1);
-                    }
-
-                    if self.match_char('f') {
-                        return Token::Float32(start, end + 1);
-                    }
-
-                    if self.match_char('B') {
-                        match self.peek_next().map(|(_, c)| c) {
-                            Some(next) if next == &'D' => {
-                                self.advance();
-                                return Token::Decimal128(start, end + 1);
-                            }
-                            _ => return Token::Error(String::from("Unknown number type B."))
-                        }
-                    }
-                }
-
-                Token::Number(start, end)
-            }
-            Some((_, '/')) | Some((_, ':')) => {
-                match self.peek_next().map(|(_, c)| c) {
-                    Some(next) if (*next).is_digit(10) => {
-                        self.advance();
-
-                        while !self.is_whitespace(self.peek()) {
+                        while self.is_digit(self.peek()) {
                             self.advance();
-                        }
-
-                        match self.peek_next().map(|(_, c)| c) {
-                            Some(next) if (*next).is_digit(10) => {
-                                self.advance();
-        
-                                while !self.is_whitespace(self.peek()) {
-                                    self.advance();
-                                }
-                                
-                                let (start, end) = self.range();
-        
-                                return Token::Date(start, end)
-                            }
-                            _ =>()
                         }
 
                         let (start, end) = self.range();
 
-                        Token::Date(start, end)
+                        if self.match_char('d') {
+                            return Token::Float64(start, end + 1);
+                        }
+
+                        if self.match_char('f') {
+                            return Token::Float32(start, end + 1);
+                        }
+
+                        if self.match_char('B') {
+                            match self.peek().map(|(_, c)| c) {
+                                Some(c) if c == 'D' => {
+                                    self.advance();
+                                    return Token::Decimal128(start, end + 2);
+                                }
+                                _ => return Token::Error(String::from("Unknown number type B.")),
+                            }
+                        }
+
+                        return Token::Float64Double(start, end);
                     }
-                    _ => Token::Error(String::from("Invalid date.")),
+
+                    return Token::Error(String::from("'.' must be followed by digit."));
                 }
+
+                Token::Error(String::from("Number cannot end with '.'"))
             }
+            Some((_, '/')) | Some((_, ':')) => match self.peek_next().map(|(_, c)| c) {
+                Some(next) if (*next).is_digit(10) => {
+                    self.advance();
+
+                    while !self.is_whitespace(self.peek()) {
+                        self.advance();
+                    }
+
+                    match self.peek_next().map(|(_, c)| c) {
+                        Some(next) if (*next).is_digit(10) => {
+                            self.advance();
+
+                            while !self.is_whitespace(self.peek()) {
+                                self.advance();
+                            }
+
+                            let (start, end) = self.range();
+
+                            return Token::Date(start, end);
+                        }
+                        _ => (),
+                    }
+
+                    let (start, end) = self.range();
+
+                    Token::Date(start, end)
+                }
+                _ => Token::Error(String::from("Invalid date.")),
+            },
             _ => Token::Number(start, end),
         }
     }
@@ -246,8 +246,8 @@ impl<'a> Scanner<'a> {
             match self.peek() {
                 Some((_, ch)) if ch != '"' => {
                     self.advance();
-                },
-                _ => break
+                }
+                _ => break,
             }
         }
 
@@ -261,7 +261,7 @@ impl<'a> Scanner<'a> {
 
         Token::String(start + 1, end - 1)
     }
-    
+
     pub fn scan_token(&mut self) -> Option<Token> {
         self.skip_whitespace();
 
@@ -279,10 +279,68 @@ impl<'a> Scanner<'a> {
 
                 match ch {
                     '"' => Some(self.string()),
-                    _ => Some(Token::Error(String::from("Unknown token.")))
+                    _ => Some(Token::Error(String::from("Unknown token."))),
                 }
             }
             None => None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tokenize(source: &str) -> Vec<Token> {
+        let mut scanner = Scanner::new(source);
+        let mut tokens: Vec<Token> = Vec::new();
+
+        while let Some(token) = scanner.scan_token() {
+            tokens.push(token);
+        }
+
+        tokens
+    }
+
+    #[test]
+    fn parse_integers() {
+        let tokens = tokenize("1");
+        let expected = vec![Token::Number(0, 1)];
+        assert_eq!(expected, tokens);
+    }
+
+    #[test]
+    fn parse_64_double_floats() {
+        let tokens = tokenize("1.567");
+        let expected = vec![Token::Float64Double(0, 5)];
+        assert_eq!(expected, tokens);
+    }
+
+    #[test]
+    fn parse_64_floats() {
+        let tokens = tokenize("1.567d");
+        let expected = vec![Token::Float64(0, 6)];
+        assert_eq!(expected, tokens);
+    }
+
+    #[test]
+    fn parse_32_floats() {
+        let tokens = tokenize("1.567f");
+        let expected = vec![Token::Float32(0, 6)];
+        assert_eq!(expected, tokens);
+    }
+
+    #[test]
+    fn parse_long() {
+        let tokens = tokenize("155L");
+        let expected = vec![Token::Long(0, 4)];
+        assert_eq!(expected, tokens);
+    }
+
+    #[test]
+    fn parse_128_decimal() {
+        let tokens = tokenize("155.8BD");
+        let expected = vec![Token::Decimal128(0, 7)];
+        assert_eq!(expected, tokens);
     }
 }
