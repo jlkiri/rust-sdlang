@@ -10,6 +10,8 @@ fn main() -> std::io::Result<()> {
 
     let source = std::fs::read_to_string(cwd)?;
 
+    println!("source length: {}", source.len());
+
     let mut tokens: Vec<Token> = Vec::new();
     let mut scanner = Scanner::new(&source);
 
