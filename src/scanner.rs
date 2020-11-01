@@ -8,15 +8,16 @@ type Char = (Index, char);
 pub enum Token {
     True,
     False,
-    Error(String),
-    String(usize, usize),
     Null,
     On,
     Off,
+    Equal,
+    Error(String),
+    String(usize, usize),
+    Identifier(usize, usize),
     Float64Double(usize, usize),
     Date(usize, usize),
     Decimal128(usize, usize),
-    Node(usize, usize),
     Number(usize, usize),
     Float64(usize, usize),
     Float32(usize, usize),
@@ -85,6 +86,21 @@ impl<'a> Scanner<'a> {
                         _ => break,
                     }
                 },
+                '-' => match self.peek_next() {
+                    Some((_, ch)) => {
+                        if ch == &'-' {
+                            loop {
+                                match self.peek() {
+                                    Some((_, ch)) if ch != '\n' => {
+                                        self.advance();
+                                    }
+                                    _ => break,
+                                }
+                            }
+                        }
+                    }
+                    None => return,
+                },
                 _ => return,
             }
         }
@@ -147,11 +163,11 @@ impl<'a> Scanner<'a> {
             'n' if self.matches_source(start + 1, end, 3, "ull") => Token::Null,
             'o' if end - start > 1 && self.matches_source(start + 1, end, 1, "n") => Token::On,
             'o' if end - start > 1 && self.matches_source(start + 1, end, 2, "ff") => Token::Off,
-            _ => Token::Node(start, end),
+            _ => Token::Identifier(start, end),
         }
     }
 
-    fn word(&mut self) -> Token {
+    fn identifier(&mut self) -> Token {
         while self.is_alpha(self.peek()) || self.is_digit(self.peek()) {
             self.advance();
         }
@@ -270,7 +286,7 @@ impl<'a> Scanner<'a> {
         match self.advance() {
             Some((_, ch)) => {
                 if ch.is_ascii_alphabetic() {
-                    return Some(self.word());
+                    return Some(self.identifier());
                 }
 
                 if ch.is_digit(10) {
@@ -279,6 +295,7 @@ impl<'a> Scanner<'a> {
 
                 match ch {
                     '"' => Some(self.string()),
+                    '=' => Some(Token::Equal),
                     _ => Some(Token::Error(String::from("Unknown token."))),
                 }
             }
@@ -303,44 +320,104 @@ mod tests {
     }
 
     #[test]
-    fn parse_integers() {
+    fn scan_integers() {
         let tokens = tokenize("1");
         let expected = vec![Token::Number(0, 1)];
         assert_eq!(expected, tokens);
     }
 
     #[test]
-    fn parse_64_double_floats() {
+    fn scan_64_double_floats() {
         let tokens = tokenize("1.567");
         let expected = vec![Token::Float64Double(0, 5)];
         assert_eq!(expected, tokens);
     }
 
     #[test]
-    fn parse_64_floats() {
+    fn scan_64_floats() {
         let tokens = tokenize("1.567d");
         let expected = vec![Token::Float64(0, 6)];
         assert_eq!(expected, tokens);
     }
 
     #[test]
-    fn parse_32_floats() {
+    fn scan_32_floats() {
         let tokens = tokenize("1.567f");
         let expected = vec![Token::Float32(0, 6)];
         assert_eq!(expected, tokens);
     }
 
     #[test]
-    fn parse_long() {
+    fn scan_long() {
         let tokens = tokenize("155L");
         let expected = vec![Token::Long(0, 4)];
         assert_eq!(expected, tokens);
     }
 
     #[test]
-    fn parse_128_decimal() {
+    fn scan_128_decimal() {
         let tokens = tokenize("155.8BD");
         let expected = vec![Token::Decimal128(0, 7)];
+        assert_eq!(expected, tokens);
+    }
+
+    #[test]
+    fn scan_string() {
+        let tokens = tokenize(r#""hello""#);
+        let expected = vec![Token::String(1, 6)];
+        assert_eq!(expected, tokens);
+    }
+
+    #[test]
+    fn scan_identifier() {
+        let tokens = tokenize("author");
+        let expected = vec![Token::Identifier(0, 6)];
+        assert_eq!(expected, tokens);
+    }
+
+    #[test]
+    fn skips_whitespace() {
+        let source = "author  
+age";
+        let tokens = tokenize(source);
+        let expected = vec![Token::Identifier(0, 6), Token::Identifier(9, 12)];
+        assert_eq!(expected, tokens);
+    }
+
+    #[test]
+    fn skips_comments() {
+        let source = "author //comment comment
+age
+";
+        let tokens = tokenize(source);
+        let expected = vec![Token::Identifier(0, 6), Token::Identifier(25, 28)];
+        assert_eq!(expected, tokens);
+    }
+
+    #[test]
+    fn skips_shell_comments() {
+        let source = "author #comment comment
+age
+";
+        let tokens = tokenize(source);
+        let expected = vec![Token::Identifier(0, 6), Token::Identifier(24, 27)];
+        assert_eq!(expected, tokens);
+    }
+
+    #[test]
+    fn skips_lua_comments() {
+        let source = "author --comment comment
+age
+";
+        let tokens = tokenize(source);
+        let expected = vec![Token::Identifier(0, 6), Token::Identifier(25, 28)];
+        assert_eq!(expected, tokens);
+    }
+
+    #[test]
+    fn attribute() {
+        let tokens = tokenize("private=true");
+        let expected = vec![Token::Identifier(0, 7), Token::Equal, Token::True];
         assert_eq!(expected, tokens);
     }
 }
