@@ -12,6 +12,7 @@ pub enum Token {
     On,
     Off,
     Equal,
+    Semicolon,
     Error(String),
     String(usize, usize),
     Identifier(usize, usize),
@@ -60,9 +61,18 @@ impl<'a> Scanner<'a> {
     fn skip_whitespace(&mut self) {
         while let Some((_, ch)) = self.peek() {
             match ch {
-                ' ' | '\r' | '\t' | '\\' | '\n' => {
+                ' ' | '\r' | '\t' => {
                     self.advance();
                 }
+                '\\' => match self.peek_next() {
+                    Some((_, ch)) => {
+                        if ch == &'\n' {
+                            self.advance();
+                            self.advance();
+                        }
+                    }
+                    _ => (),
+                },
                 '/' => match self.peek_next() {
                     Some((_, ch)) => {
                         if ch == &'/' {
@@ -296,6 +306,8 @@ impl<'a> Scanner<'a> {
                 match ch {
                     '"' => Some(self.string()),
                     '=' => Some(Token::Equal),
+                    ';' => Some(Token::Semicolon),
+                    '\n' => Some(Token::Semicolon),
                     _ => Some(Token::Error(String::from("Unexpected character."))),
                 }
             }
@@ -380,37 +392,57 @@ mod tests {
         let source = "author  
 age";
         let tokens = tokenize(source);
-        let expected = vec![Token::Identifier(0, 6), Token::Identifier(9, 12)];
+        let expected = vec![
+            Token::Identifier(0, 6),
+            Token::Semicolon,
+            Token::Identifier(9, 12),
+        ];
+        println!("identifier: {}", &source[9..12]);
         assert_eq!(expected, tokens);
     }
 
     #[test]
     fn skips_comments() {
-        let source = "author //comment comment
+        let source = "author //comment comment;
 age
 ";
         let tokens = tokenize(source);
-        let expected = vec![Token::Identifier(0, 6), Token::Identifier(25, 28)];
+        let expected = vec![
+            Token::Identifier(0, 6),
+            Token::Semicolon,
+            Token::Identifier(26, 29),
+            Token::Semicolon,
+        ];
         assert_eq!(expected, tokens);
     }
 
     #[test]
     fn skips_shell_comments() {
-        let source = "author #comment comment
+        let source = "author #comment comment;
 age
 ";
         let tokens = tokenize(source);
-        let expected = vec![Token::Identifier(0, 6), Token::Identifier(24, 27)];
+        let expected = vec![
+            Token::Identifier(0, 6),
+            Token::Semicolon,
+            Token::Identifier(25, 28),
+            Token::Semicolon,
+        ];
         assert_eq!(expected, tokens);
     }
 
     #[test]
     fn skips_lua_comments() {
-        let source = "author --comment comment
+        let source = "author --comment comment;
 age
 ";
         let tokens = tokenize(source);
-        let expected = vec![Token::Identifier(0, 6), Token::Identifier(25, 28)];
+        let expected = vec![
+            Token::Identifier(0, 6),
+            Token::Semicolon,
+            Token::Identifier(26, 29),
+            Token::Semicolon,
+        ];
         assert_eq!(expected, tokens);
     }
 
@@ -461,7 +493,7 @@ age
         let expected = vec![
             Token::Error(String::from("'.' must be followed by digit.")),
             Token::Error(String::from("Unexpected character.")),
-            Token::Identifier(2, 3)
+            Token::Identifier(2, 3),
         ];
         assert_eq!(expected, tokens);
     }
