@@ -296,7 +296,7 @@ impl<'a> Scanner<'a> {
                 match ch {
                     '"' => Some(self.string()),
                     '=' => Some(Token::Equal),
-                    _ => Some(Token::Error(String::from("Unknown token."))),
+                    _ => Some(Token::Error(String::from("Unexpected character."))),
                 }
             }
             None => None,
@@ -442,6 +442,37 @@ age
         let source = "2015/12/06 12:00:00.000 attr";
         let tokens = tokenize(source);
         let expected = vec![Token::Date(0, 23), Token::Identifier(24, 28)];
+        assert_eq!(expected, tokens);
+    }
+
+    #[test]
+    fn number_error_1() {
+        let tokens = tokenize("5.");
+        let expected = vec![
+            Token::Error(String::from("Number cannot end with '.'")),
+            Token::Error(String::from("Unexpected character.")),
+        ];
+        assert_eq!(expected, tokens);
+    }
+
+    #[test]
+    fn number_error_2() {
+        let tokens = tokenize("5.a");
+        let expected = vec![
+            Token::Error(String::from("'.' must be followed by digit.")),
+            Token::Error(String::from("Unexpected character.")),
+            Token::Identifier(2, 3)
+        ];
+        assert_eq!(expected, tokens);
+    }
+
+    #[test]
+    fn number_error_3() {
+        let tokens = tokenize("5.3BF");
+        let expected = vec![
+            Token::Error(String::from("Unknown number type B.")),
+            Token::Identifier(4, 5),
+        ];
         assert_eq!(expected, tokens);
     }
 }
