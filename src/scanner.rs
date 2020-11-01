@@ -13,6 +13,7 @@ pub enum Token {
     Null,
     On,
     Off,
+    Date(usize, usize),
     BinaryDecimal(usize, usize),
     Node(usize, usize),
     Number(usize, usize),
@@ -75,20 +76,20 @@ impl<'a> Scanner<'a> {
             }
         }
     }
-    fn try_keyword(&self, start: usize, end: usize, len: usize, rest: &str) -> bool {
-        let source_rest = &self.source[start + 1..start + 1 + len];
-        end - start == len + 1 && source_rest == rest
+    fn matches_source(&self, start: usize, end: usize, len: usize, rest: &str) -> bool {
+        let source_rest = &self.source[start..start + len];
+        end - start == len && source_rest == rest
     }
-    fn check_keyword(&self) -> Token {
+    fn try_keyword(&self) -> Token {
         let (_, ch) = self.start.unwrap();
         let (start, end) = self.range();
 
         match ch {
-            't' if self.try_keyword(start, end, 3, "rue") => Token::True,
-            'f' if self.try_keyword(start, end, 4, "alse") => Token::False,
-            'n' if self.try_keyword(start, end, 3, "ull") => Token::Null,
-            'o' if end - start > 1 && self.try_keyword(start, end, 1, "n") => Token::On,
-            'o' if end - start > 1 && self.try_keyword(start, end, 2, "ff") => Token::Off,
+            't' if self.matches_source(start + 1, end, 3, "rue") => Token::True,
+            'f' if self.matches_source(start + 1, end, 4, "alse") => Token::False,
+            'n' if self.matches_source(start + 1, end, 3, "ull") => Token::Null,
+            'o' if end - start > 1 && self.matches_source(start + 1, end, 1, "n") => Token::On,
+            'o' if end - start > 1 && self.matches_source(start + 1, end, 2, "ff") => Token::Off,
             _ => Token::Node(start, end),
         }
     }
@@ -97,7 +98,7 @@ impl<'a> Scanner<'a> {
             self.advance();
         }
 
-        self.check_keyword()
+        self.try_keyword()
     }
     fn range(&self) -> (usize, usize) {
         let (start, _) = self.start.unwrap();
@@ -168,32 +169,58 @@ impl<'a> Scanner<'a> {
                         return Token::Float32(start, end + 1);
                     }
 
-                    if let Some(ch) = self.peek().map(|(_, c)| c) {
+                    if self.match_char('B') {
                         match self.peek_next().map(|(_, c)| c) {
-                            Some(next) if ch == 'B' && next == &'D' => {
-                                self.advance();
+                            Some(next) if next == &'D' => {
                                 self.advance();
                                 return Token::BinaryDecimal(start, end + 1);
                             }
-                            _ => (),
+                            _ => panic!("Unknown modifier B."),
                         }
                     }
                 }
 
-                return Token::Number(start, end);
+                Token::Number(start, end)
+            }
+            Some((_, '/')) => {
+                while !self.is_whitespace(self.peek()) {
+                    self.advance();
+                }
+
+                match self.peek_next().map(|(_, c)| c) {
+                    Some(next) if (*next).is_digit(10) => {
+                        self.advance();
+
+                        while !self.is_whitespace(self.peek()) {
+                            self.advance();
+                        }
+
+                        let (start, end) = self.range();
+
+                        Token::Date(start, end)
+                    }
+                    _ => panic!("Unknown token."),
+                }
             }
             _ => Token::Number(start, end),
         }
+    }
+    fn is_whitespace(&self, chr: Option<Char>) -> bool {
+        if let Some((_, ch)) = chr {
+            return ch.is_whitespace();
+        }
+        false
     }
     fn string(&mut self) -> Token {
         while let Some((_, ch)) = self.peek() {
             if ch == '"' {
                 break;
             }
-            
+
             self.advance();
         }
 
+        // Consume '"'
         self.advance();
 
         let (start, end) = self.range();
