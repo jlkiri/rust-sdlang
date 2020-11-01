@@ -388,24 +388,32 @@ mod tests {
     }
 
     #[test]
-    fn skips_whitespace() {
-        let source = "author  
-age";
+    fn automatic_semicolon() {
+        let source = r#"author  
+age"#;
         let tokens = tokenize(source);
         let expected = vec![
             Token::Identifier(0, 6),
             Token::Semicolon,
             Token::Identifier(9, 12),
         ];
-        println!("identifier: {}", &source[9..12]);
+        assert_eq!(expected, tokens);
+    }
+
+    #[test]
+    fn backslash() {
+        let source = r#"author  \
+age"#;
+        let tokens = tokenize(source);
+        let expected = vec![Token::Identifier(0, 6), Token::Identifier(10, 13)];
         assert_eq!(expected, tokens);
     }
 
     #[test]
     fn skips_comments() {
-        let source = "author //comment comment;
+        let source = r#"author //comment comment;
 age
-";
+"#;
         let tokens = tokenize(source);
         let expected = vec![
             Token::Identifier(0, 6),
@@ -418,9 +426,9 @@ age
 
     #[test]
     fn skips_shell_comments() {
-        let source = "author #comment comment;
+        let source = r#"author #comment comment;
 age
-";
+"#;
         let tokens = tokenize(source);
         let expected = vec![
             Token::Identifier(0, 6),
@@ -433,9 +441,9 @@ age
 
     #[test]
     fn skips_lua_comments() {
-        let source = "author --comment comment;
+        let source = r#"author --comment comment;
 age
-";
+"#;
         let tokens = tokenize(source);
         let expected = vec![
             Token::Identifier(0, 6),
