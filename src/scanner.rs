@@ -78,7 +78,7 @@ impl<'a> Scanner<'a> {
                         if ch == &'/' {
                             loop {
                                 match self.peek() {
-                                    Some((_, ch)) if ch != '\n' => {
+                                    Some((_, ch)) if ch != ';' => {
                                         self.advance();
                                     }
                                     _ => break,
@@ -90,7 +90,7 @@ impl<'a> Scanner<'a> {
                 },
                 '#' => loop {
                     match self.peek() {
-                        Some((_, ch)) if ch != '\n' => {
+                        Some((_, ch)) if ch != ';' => {
                             self.advance();
                         }
                         _ => break,
@@ -101,7 +101,7 @@ impl<'a> Scanner<'a> {
                         if ch == &'-' {
                             loop {
                                 match self.peek() {
-                                    Some((_, ch)) if ch != '\n' => {
+                                    Some((_, ch)) if ch != ';' => {
                                         self.advance();
                                     }
                                     _ => break,
@@ -306,7 +306,14 @@ impl<'a> Scanner<'a> {
                 match ch {
                     '"' => Some(self.string()),
                     '=' => Some(Token::Equal),
-                    ';' => Some(Token::Semicolon),
+                    ';' => {
+                        if let Some((_, ch)) = self.peek() {
+                            if ch == '\n' {
+                                self.advance();
+                            }
+                        }
+                        Some(Token::Semicolon)
+                    },
                     '\n' => Some(Token::Semicolon),
                     _ => Some(Token::Error(String::from("Unexpected character."))),
                 }
