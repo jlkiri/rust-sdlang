@@ -145,7 +145,7 @@ impl<'a> Scanner<'a> {
         if let Some((_, ch)) = chr {
             return ch.is_whitespace();
         }
-        false
+        true
     }
 
     fn matches_source(&self, start: usize, end: usize, len: usize, rest: &str) -> bool {
@@ -240,6 +240,8 @@ impl<'a> Scanner<'a> {
                                 self.advance();
                             }
 
+                            
+
                             let (start, end) = self.range();
 
                             return Token::Date(start, end);
@@ -247,6 +249,7 @@ impl<'a> Scanner<'a> {
                         _ => (),
                     }
 
+                    
                     let (start, end) = self.range();
 
                     Token::Date(start, end)
@@ -418,6 +421,30 @@ age
     fn attribute() {
         let tokens = tokenize("private=true");
         let expected = vec![Token::Identifier(0, 7), Token::Equal, Token::True];
+        assert_eq!(expected, tokens);
+    }
+
+    #[test]
+    fn time() {
+        let source = "13:23:34";
+        let tokens = tokenize(source);
+        let expected = vec![Token::Date(0, 8)];
+        assert_eq!(expected, tokens);
+    }
+
+    #[test]
+    fn date_1() {
+        let source = "2015/12/06 12:00:00.000-UTC attr";
+        let tokens = tokenize(source);
+        let expected = vec![Token::Date(0, 27), Token::Identifier(29, 33)];
+        assert_eq!(expected, tokens);
+    }
+
+    #[test]
+    fn date_2() {
+        let source = "2015/12/06 12:00:00.000 attr";
+        let tokens = tokenize(source);
+        let expected = vec![Token::Date(0, 23), Token::Identifier(25, 29)];
         assert_eq!(expected, tokens);
     }
 }
