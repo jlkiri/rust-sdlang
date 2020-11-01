@@ -9,12 +9,13 @@ pub enum Token {
     Unknown,
     True,
     False,
+    Error(String),
     String(usize, usize),
     Null,
     On,
     Off,
     Date(usize, usize),
-    BinaryDecimal(usize, usize),
+    Decimal128(usize, usize),
     Node(usize, usize),
     Number(usize, usize),
     Float64(usize, usize),
@@ -40,17 +41,21 @@ impl<'a> Scanner<'a> {
             scanner,
         }
     }
+
     fn advance(&mut self) -> Option<Char> {
         let current = self.current;
         self.current = self.scanner.next();
         current
     }
+
     fn peek(&self) -> Option<Char> {
         self.current
     }
+
     fn peek_next(&mut self) -> Option<&Char> {
         self.scanner.peek()
     }
+
     fn skip_whitespace(&mut self) {
         while let Some((_, ch)) = self.peek() {
             match ch {
@@ -72,14 +77,68 @@ impl<'a> Scanner<'a> {
                     }
                     None => return,
                 },
+                '#' => {
+                    loop {
+                        match self.peek() {
+                            Some((_, ch)) if ch != '\n' => {
+                                self.advance();
+                            }
+                            _ => break,
+                        }
+                    }
+                }
                 _ => return,
             }
         }
     }
+
+    fn range(&self) -> (usize, usize) {
+        let (start, _) = self.start.unwrap();
+        let end = match self.current {
+            Some((index, _)) => index,
+            None => self.source.len(),
+        };
+
+        (start, end)
+    }
+
+    fn match_char(&mut self, target: char) -> bool {
+        if let Some(ch) = self.peek().map(|(_, c)| c) {
+            if ch == target {
+                self.advance();
+                return true;
+            }
+        }
+
+        false
+    }
+
+    fn is_alpha(&self, chr: Option<Char>) -> bool {
+        if let Some((_, ch)) = chr {
+            return ch.is_ascii_alphabetic();
+        }
+        false
+    }
+
+    fn is_digit(&self, chr: Option<Char>) -> bool {
+        if let Some((_, ch)) = chr {
+            return ch.is_digit(10);
+        }
+        false
+    }
+
+    fn is_whitespace(&self, chr: Option<Char>) -> bool {
+        if let Some((_, ch)) = chr {
+            return ch.is_whitespace();
+        }
+        false
+    }
+
     fn matches_source(&self, start: usize, end: usize, len: usize, rest: &str) -> bool {
         let source_rest = &self.source[start..start + len];
         end - start == len && source_rest == rest
     }
+
     fn try_keyword(&self) -> Token {
         let (_, ch) = self.start.unwrap();
         let (start, end) = self.range();
@@ -93,6 +152,7 @@ impl<'a> Scanner<'a> {
             _ => Token::Node(start, end),
         }
     }
+
     fn word(&mut self) -> Token {
         while self.is_alpha(self.peek()) || self.is_digit(self.peek()) {
             self.advance();
@@ -100,43 +160,7 @@ impl<'a> Scanner<'a> {
 
         self.try_keyword()
     }
-    fn range(&self) -> (usize, usize) {
-        let (start, _) = self.start.unwrap();
-        let end = match self.current {
-            Some((index, _)) => index,
-            None => self.source.len(),
-        };
 
-        (start, end)
-    }
-    fn match_char(&mut self, target: char) -> bool {
-        if let Some(ch) = self.peek().map(|(_, c)| c) {
-            if ch == target {
-                self.advance();
-                return true;
-            }
-        }
-
-        false
-    }
-    fn is_at_end(&self) -> bool {
-        match self.peek() {
-            None => true,
-            _ => false,
-        }
-    }
-    fn is_alpha(&self, chr: Option<Char>) -> bool {
-        if let Some((_, ch)) = chr {
-            return ch.is_ascii_alphabetic();
-        }
-        false
-    }
-    fn is_digit(&self, chr: Option<Char>) -> bool {
-        if let Some((_, ch)) = chr {
-            return ch.is_digit(10);
-        }
-        false
-    }
     fn number(&mut self) -> Token {
         while self.is_digit(self.peek()) {
             self.advance();
@@ -173,20 +197,16 @@ impl<'a> Scanner<'a> {
                         match self.peek_next().map(|(_, c)| c) {
                             Some(next) if next == &'D' => {
                                 self.advance();
-                                return Token::BinaryDecimal(start, end + 1);
+                                return Token::Decimal128(start, end + 1);
                             }
-                            _ => panic!("Unknown modifier B."),
+                            _ => return Token::Error(String::from("Unknown number type B."))
                         }
                     }
                 }
 
                 Token::Number(start, end)
             }
-            Some((_, '/')) => {
-                while !self.is_whitespace(self.peek()) {
-                    self.advance();
-                }
-
+            Some((_, '/')) | Some((_, ':')) => {
                 match self.peek_next().map(|(_, c)| c) {
                     Some(next) if (*next).is_digit(10) => {
                         self.advance();
@@ -195,38 +215,53 @@ impl<'a> Scanner<'a> {
                             self.advance();
                         }
 
+                        match self.peek_next().map(|(_, c)| c) {
+                            Some(next) if (*next).is_digit(10) => {
+                                self.advance();
+        
+                                while !self.is_whitespace(self.peek()) {
+                                    self.advance();
+                                }
+                                
+                                let (start, end) = self.range();
+        
+                                return Token::Date(start, end)
+                            }
+                            _ =>()
+                        }
+
                         let (start, end) = self.range();
 
                         Token::Date(start, end)
                     }
-                    _ => panic!("Unknown token."),
+                    _ => Token::Error(String::from("Invalid date.")),
                 }
             }
             _ => Token::Number(start, end),
         }
     }
-    fn is_whitespace(&self, chr: Option<Char>) -> bool {
-        if let Some((_, ch)) = chr {
-            return ch.is_whitespace();
-        }
-        false
-    }
-    fn string(&mut self) -> Token {
-        while let Some((_, ch)) = self.peek() {
-            if ch == '"' {
-                break;
-            }
 
-            self.advance();
+    fn string(&mut self) -> Token {
+        loop {
+            match self.peek() {
+                Some((_, ch)) if ch != '"' => {
+                    self.advance();
+                },
+                _ => break
+            }
         }
 
         // Consume '"'
-        self.advance();
+        match self.advance() {
+            None => return Token::Error(String::from("Unterminated string.")),
+            _ => (),
+        }
 
         let (start, end) = self.range();
 
         Token::String(start + 1, end - 1)
     }
+    
     pub fn scan_token(&mut self) -> Option<Token> {
         self.skip_whitespace();
 
@@ -244,11 +279,7 @@ impl<'a> Scanner<'a> {
 
                 match ch {
                     '"' => Some(self.string()),
-                    _ => {
-                        println!("Unknown char: {:#?}", ch);
-
-                        Some(Token::Unknown)
-                    }
+                    _ => Some(Token::Error(String::from("Unknown token.")))
                 }
             }
             None => None,
