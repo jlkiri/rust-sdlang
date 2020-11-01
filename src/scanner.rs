@@ -240,8 +240,6 @@ impl<'a> Scanner<'a> {
                                 self.advance();
                             }
 
-                            
-
                             let (start, end) = self.range();
 
                             return Token::Date(start, end);
@@ -249,7 +247,6 @@ impl<'a> Scanner<'a> {
                         _ => (),
                     }
 
-                    
                     let (start, end) = self.range();
 
                     Token::Date(start, end)
@@ -436,7 +433,7 @@ age
     fn date_1() {
         let source = "2015/12/06 12:00:00.000-UTC attr";
         let tokens = tokenize(source);
-        let expected = vec![Token::Date(0, 27), Token::Identifier(29, 33)];
+        let expected = vec![Token::Date(0, 27), Token::Identifier(28, 32)];
         assert_eq!(expected, tokens);
     }
 
@@ -444,7 +441,7 @@ age
     fn date_2() {
         let source = "2015/12/06 12:00:00.000 attr";
         let tokens = tokenize(source);
-        let expected = vec![Token::Date(0, 23), Token::Identifier(25, 29)];
+        let expected = vec![Token::Date(0, 23), Token::Identifier(24, 28)];
         assert_eq!(expected, tokens);
     }
 }

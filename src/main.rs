@@ -7,7 +7,7 @@ fn main() -> std::io::Result<()> {
     let mut cwd = std::env::current_dir().unwrap();
 
     cwd.push("config.sdl");
-    
+
     let source = std::fs::read_to_string(cwd)?;
 
     let mut tokens: Vec<Token> = Vec::new();
