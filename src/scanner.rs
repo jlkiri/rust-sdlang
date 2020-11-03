@@ -71,7 +71,7 @@ impl<'a> Scanner<'a> {
                             self.advance();
                         }
                     }
-                    _ => (),
+                    _ => break,
                 },
                 '/' => match self.peek_next() {
                     Some((_, ch)) => {
@@ -85,9 +85,11 @@ impl<'a> Scanner<'a> {
                                     _ => break,
                                 }
                             }
+                        } else {
+                            break;
                         }
                     }
-                    _ => (),
+                    _ => break,
                 },
                 '#' => loop {
                     match self.peek() {
@@ -110,9 +112,9 @@ impl<'a> Scanner<'a> {
                             }
                         }
                     }
-                    None => return,
+                    None => break,
                 },
-                _ => return,
+                _ => break,
             }
         }
     }
@@ -442,6 +444,21 @@ age
     }
 
     #[test]
+    fn skips_comments_newline() {
+        let source = r#"a//
+age
+"#;
+        let tokens = tokenize(source);
+        let expected = vec![
+            Token::Identifier(0, 1),
+            Token::Semicolon,
+            Token::Identifier(4, 7),
+            Token::Semicolon,
+        ];
+        assert_eq!(expected, tokens);
+    }
+
+    #[test]
     fn skips_shell_comments() {
         let source = r#"author #comment comment;
 age
@@ -511,9 +528,22 @@ age
 
     #[test]
     fn date_error() {
-        let source = "/a";
-        let tokens = tokenize(source);
-        let expected = vec![Token::True];
+        let tokens = tokenize("2015/a");
+        let expected = vec![
+            Token::Error(String::from("Invalid date.")),
+            Token::Error(String::from("Unexpected character.")),
+            Token::Identifier(5, 6),
+        ];
+        assert_eq!(expected, tokens);
+    }
+
+    #[test]
+    fn forward_slash_error() {
+        let tokens = tokenize("/a");
+        let expected = vec![
+            Token::Error(String::from("Unexpected character.")),
+            Token::Identifier(1, 2),
+        ];
         assert_eq!(expected, tokens);
     }
 
