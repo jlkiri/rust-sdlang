@@ -76,9 +76,10 @@ impl<'a> Scanner<'a> {
                 '/' => match self.peek_next() {
                     Some((_, ch)) => {
                         if ch == &'/' {
+                            self.advance();
                             loop {
                                 match self.peek() {
-                                    Some((_, ch)) if ch != ';' => {
+                                    Some((_, ch)) if ch != ';' && ch != '\n' => {
                                         self.advance();
                                     }
                                     _ => break,
@@ -86,11 +87,11 @@ impl<'a> Scanner<'a> {
                             }
                         }
                     }
-                    None => return,
+                    _ => (),
                 },
                 '#' => loop {
                     match self.peek() {
-                        Some((_, ch)) if ch != ';' => {
+                        Some((_, ch)) if ch != ';' && ch != '\n' => {
                             self.advance();
                         }
                         _ => break,
@@ -101,7 +102,7 @@ impl<'a> Scanner<'a> {
                         if ch == &'-' {
                             loop {
                                 match self.peek() {
-                                    Some((_, ch)) if ch != ';' => {
+                                    Some((_, ch)) if ch != ';' && ch != '\n' => {
                                         self.advance();
                                     }
                                     _ => break,
@@ -510,7 +511,7 @@ age
 
     #[test]
     fn date_error() {
-        let source = "2015/a/06";
+        let source = "/a";
         let tokens = tokenize(source);
         let expected = vec![Token::True];
         assert_eq!(expected, tokens);
