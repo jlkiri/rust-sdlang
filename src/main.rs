@@ -1,5 +1,7 @@
+mod parser;
 mod scanner;
 
+use parser::Parser;
 use scanner::Scanner;
 use scanner::Token;
 
@@ -10,16 +12,15 @@ fn main() -> std::io::Result<()> {
 
     let source = std::fs::read_to_string(cwd)?;
 
-    println!("source length: {}", source.len());
+    let ref mut scanner = Scanner::new(
+        r#"author "Kirill Vasiltsov";
+year 2020.3f;"#,
+    );
 
-    let mut tokens: Vec<Token> = Vec::new();
-    let mut scanner = Scanner::new(&source);
+    let parser = Parser::new(scanner);
+    let nodes = parser.parse();
 
-    while let Some(token) = scanner.scan_token() {
-        tokens.push(token);
-    }
-
-    println!("{:#?}", tokens);
+    println!("{:?}", nodes);
 
     Ok(())
 }

@@ -4,7 +4,7 @@ use std::str::CharIndices;
 type Index = usize;
 type Char = (Index, char);
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Token {
     True,
     False,
@@ -13,7 +13,7 @@ pub enum Token {
     Off,
     Equal,
     Semicolon,
-    Error(String),
+    Error(&'static str),
     String(usize, usize),
     Identifier(usize, usize),
     Float64Double(usize, usize),
@@ -225,17 +225,17 @@ impl<'a> Scanner<'a> {
                                     self.advance();
                                     return Token::Decimal128(start, end + 2);
                                 }
-                                _ => return Token::Error(String::from("Unknown number type B.")),
+                                _ => return Token::Error("Unknown number type B."),
                             }
                         }
 
                         return Token::Float64Double(start, end);
                     }
 
-                    return Token::Error(String::from("'.' must be followed by digit."));
+                    return Token::Error("'.' must be followed by digit.");
                 }
 
-                Token::Error(String::from("Number cannot end with '.'"))
+                Token::Error("Number cannot end with '.'")
             }
             Some((_, '/')) | Some((_, ':')) => match self.peek_next().map(|(_, c)| c) {
                 Some(next) if (*next).is_digit(10) => {
@@ -264,7 +264,7 @@ impl<'a> Scanner<'a> {
 
                     Token::Date(start, end)
                 }
-                _ => Token::Error(String::from("Invalid date.")),
+                _ => Token::Error("Invalid date."),
             },
             _ => Token::Number(start, end),
         }
@@ -282,13 +282,17 @@ impl<'a> Scanner<'a> {
 
         // Consume '"'
         match self.advance() {
-            None => return Token::Error(String::from("Unterminated string.")),
+            None => return Token::Error("Unterminated string."),
             _ => (),
         }
 
         let (start, end) = self.range();
 
         Token::String(start + 1, end - 1)
+    }
+
+    pub fn source_slice(&self, start: usize, end: usize) -> &str {
+        &self.source[start..end]
     }
 
     pub fn scan_token(&mut self) -> Option<Token> {
@@ -318,7 +322,7 @@ impl<'a> Scanner<'a> {
                         Some(Token::Semicolon)
                     }
                     '\n' => Some(Token::Semicolon),
-                    _ => Some(Token::Error(String::from("Unexpected character."))),
+                    _ => Some(Token::Error("Unexpected character.")),
                 }
             }
             None => None,
@@ -543,8 +547,8 @@ age
     fn date_error() {
         let tokens = tokenize("2015/a");
         let expected = vec![
-            Token::Error(String::from("Invalid date.")),
-            Token::Error(String::from("Unexpected character.")),
+            Token::Error("Invalid date."),
+            Token::Error("Unexpected character."),
             Token::Identifier(5, 6),
         ];
         assert_eq!(expected, tokens);
@@ -554,7 +558,7 @@ age
     fn forward_slash_error() {
         let tokens = tokenize("/a");
         let expected = vec![
-            Token::Error(String::from("Unexpected character.")),
+            Token::Error("Unexpected character."),
             Token::Identifier(1, 2),
         ];
         assert_eq!(expected, tokens);
@@ -564,8 +568,8 @@ age
     fn number_error_1() {
         let tokens = tokenize("5.");
         let expected = vec![
-            Token::Error(String::from("Number cannot end with '.'")),
-            Token::Error(String::from("Unexpected character.")),
+            Token::Error("Number cannot end with '.'"),
+            Token::Error("Unexpected character."),
         ];
         assert_eq!(expected, tokens);
     }
@@ -574,8 +578,8 @@ age
     fn number_error_2() {
         let tokens = tokenize("5.a");
         let expected = vec![
-            Token::Error(String::from("'.' must be followed by digit.")),
-            Token::Error(String::from("Unexpected character.")),
+            Token::Error("'.' must be followed by digit."),
+            Token::Error("Unexpected character."),
             Token::Identifier(2, 3),
         ];
         assert_eq!(expected, tokens);
@@ -585,7 +589,7 @@ age
     fn number_error_3() {
         let tokens = tokenize("5.3BF");
         let expected = vec![
-            Token::Error(String::from("Unknown number type B.")),
+            Token::Error("Unknown number type B."),
             Token::Identifier(4, 5),
         ];
         assert_eq!(expected, tokens);
@@ -617,6 +621,16 @@ age
             Token::Semicolon,
             Token::Identifier(4, 5),
         ];
+        assert_eq!(expected, tokens);
+    }
+
+    #[test]
+    fn semicolon() {
+        let tokens = tokenize(
+            r#"author "Kirill Vasiltsov";
+year 2020;"#,
+        );
+        let expected = vec![Token::Identifier(0, 1), Token::Semicolon];
         assert_eq!(expected, tokens);
     }
 }
