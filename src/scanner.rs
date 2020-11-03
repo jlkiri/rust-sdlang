@@ -489,21 +489,21 @@ age
     }
 
     #[test]
-    fn attribute() {
+    fn scan_attribute() {
         let tokens = tokenize("private=true");
         let expected = vec![Token::Identifier(0, 7), Token::Equal, Token::True];
         assert_eq!(expected, tokens);
     }
 
     #[test]
-    fn string_attribute() {
+    fn scan_string_attribute() {
         let tokens = tokenize(r#"platform="darwin""#);
         let expected = vec![Token::Identifier(0, 8), Token::Equal, Token::String(10, 16)];
         assert_eq!(expected, tokens);
     }
 
     #[test]
-    fn time() {
+    fn scan_time() {
         let source = "13:23:34";
         let tokens = tokenize(source);
         let expected = vec![Token::Date(0, 8)];
@@ -511,7 +511,7 @@ age
     }
 
     #[test]
-    fn date_1() {
+    fn scan_date_1() {
         let source = "2015/12/06 12:00:00.000-UTC attr";
         let tokens = tokenize(source);
         let expected = vec![Token::Date(0, 27), Token::Identifier(28, 32)];
@@ -519,10 +519,23 @@ age
     }
 
     #[test]
-    fn date_2() {
+    fn scan_date_2() {
         let source = "2015/12/06 12:00:00.000 attr";
         let tokens = tokenize(source);
         let expected = vec![Token::Date(0, 23), Token::Identifier(24, 28)];
+        assert_eq!(expected, tokens);
+    }
+
+    #[test]
+    fn scan_keywords() {
+        let tokens = tokenize("off on true false null");
+        let expected = vec![
+            Token::Off,
+            Token::On,
+            Token::True,
+            Token::False,
+            Token::Null,
+        ];
         assert_eq!(expected, tokens);
     }
 
