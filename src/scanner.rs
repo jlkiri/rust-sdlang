@@ -313,7 +313,7 @@ impl<'a> Scanner<'a> {
                             }
                         }
                         Some(Token::Semicolon)
-                    },
+                    }
                     '\n' => Some(Token::Semicolon),
                     _ => Some(Token::Error(String::from("Unexpected character."))),
                 }
@@ -417,6 +417,15 @@ age"#;
     }
 
     #[test]
+    fn backslash_no_semicolon() {
+        let source = r#"a\
+b"#;
+        let tokens = tokenize(source);
+        let expected = vec![Token::Identifier(0, 1), Token::Identifier(3, 4)];
+        assert_eq!(expected, tokens);
+    }
+
+    #[test]
     fn skips_comments() {
         let source = r#"author //comment comment;
 age
@@ -469,6 +478,13 @@ age
     }
 
     #[test]
+    fn string_attribute() {
+        let tokens = tokenize(r#"platform="darwin""#);
+        let expected = vec![Token::Identifier(0, 8), Token::Equal, Token::String(10, 16)];
+        assert_eq!(expected, tokens);
+    }
+
+    #[test]
     fn time() {
         let source = "13:23:34";
         let tokens = tokenize(source);
@@ -489,6 +505,14 @@ age
         let source = "2015/12/06 12:00:00.000 attr";
         let tokens = tokenize(source);
         let expected = vec![Token::Date(0, 23), Token::Identifier(24, 28)];
+        assert_eq!(expected, tokens);
+    }
+
+    #[test]
+    fn date_error() {
+        let source = "2015/a/06";
+        let tokens = tokenize(source);
+        let expected = vec![Token::True];
         assert_eq!(expected, tokens);
     }
 
@@ -518,6 +542,35 @@ age
         let tokens = tokenize("5.3BF");
         let expected = vec![
             Token::Error(String::from("Unknown number type B.")),
+            Token::Identifier(4, 5),
+        ];
+        assert_eq!(expected, tokens);
+    }
+
+    #[test]
+    fn no_newline_after_semicolon() {
+        let tokens = tokenize(";\n");
+        let expected = vec![Token::Semicolon];
+        assert_eq!(expected, tokens);
+    }
+
+    #[test]
+    fn newline_as_semicolon() {
+        let tokens = tokenize("a\nb");
+        let expected = vec![
+            Token::Identifier(0, 1),
+            Token::Semicolon,
+            Token::Identifier(2, 3),
+        ];
+        assert_eq!(expected, tokens);
+    }
+
+    #[test]
+    fn same_line_semicolon() {
+        let tokens = tokenize("a ; b");
+        let expected = vec![
+            Token::Identifier(0, 1),
+            Token::Semicolon,
             Token::Identifier(4, 5),
         ];
         assert_eq!(expected, tokens);
