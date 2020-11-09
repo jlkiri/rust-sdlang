@@ -54,18 +54,9 @@ impl<'a> Scanner<'a> {
     fn skip_whitespace(&mut self) {
         while let Some((_, ch)) = self.peek() {
             match ch {
-                ' ' | '\r' | '\t' => {
+                ' ' | '\t' | '\n' | '\r' => {
                     self.advance();
                 }
-                '\\' => match self.peek_next() {
-                    Some((_, ch)) => {
-                        if ch == &'\n' {
-                            self.advance();
-                            self.advance();
-                        }
-                    }
-                    _ => break,
-                },
                 '/' => match self.peek_next() {
                     Some((_, ch)) => {
                         if ch == &'/' {
@@ -190,9 +181,7 @@ impl<'a> Scanner<'a> {
         let (start, end) = self.range();
 
         match self.peek().map(|(_, c)| c) {
-            Some(ch) if !ch.is_digit(10) => {
-                Token::Error("'.' must be followed by digit.", start, end)
-            }
+            Some(ch) if !ch.is_digit(10) => self.make_error("'.' must be followed by digit."),
             Some(_) => {
                 while self.is_digit(self.peek()) {
                     self.advance();
@@ -224,7 +213,7 @@ impl<'a> Scanner<'a> {
 
                 return Token::Float64(start, end);
             }
-            _ => Token::Float64(start, end),
+            _ => self.make_error("'.' must be followed by digit."),
         }
     }
 
@@ -292,7 +281,6 @@ impl<'a> Scanner<'a> {
                         }
                         Some(Token::Semicolon)
                     }
-                    '\n' => Some(Token::Semicolon),
                     _ => Some(self.make_error("Unexpected character.")),
                 }
             }
@@ -336,6 +324,23 @@ mod tests {
     }
 
     #[test]
+    fn scan_64_float_error() {
+        let tokens = tokenize("1.");
+        let expected = vec![Token::Error("'.' must be followed by digit.", 0, 2)];
+        assert_eq!(expected, tokens);
+    }
+
+    #[test]
+    fn scan_64_float_error_2() {
+        let tokens = tokenize("5.a");
+        let expected = vec![
+            Token::Error("'.' must be followed by digit.", 0, 2),
+            Token::Identifier(2, 3),
+        ];
+        assert_eq!(expected, tokens);
+    }
+
+    #[test]
     fn scan_string() {
         let tokens = tokenize(r#""hello""#);
         let expected = vec![Token::String(1, 6)];
@@ -350,40 +355,9 @@ mod tests {
     }
 
     #[test]
-    fn automatic_semicolon() {
-        let source = r#"author  
-age"#;
-        let tokens = tokenize(source);
-        let expected = vec![
-            Token::Identifier(0, 6),
-            Token::Semicolon,
-            Token::Identifier(9, 12),
-        ];
-        assert_eq!(expected, tokens);
-    }
-
-    #[test]
-    fn backslash() {
-        let source = r#"author  \
-age"#;
-        let tokens = tokenize(source);
-        let expected = vec![Token::Identifier(0, 6), Token::Identifier(10, 13)];
-        assert_eq!(expected, tokens);
-    }
-
-    #[test]
-    fn backslash_no_semicolon() {
-        let source = r#"a\
-b"#;
-        let tokens = tokenize(source);
-        let expected = vec![Token::Identifier(0, 1), Token::Identifier(3, 4)];
-        assert_eq!(expected, tokens);
-    }
-
-    #[test]
     fn skips_comments() {
         let source = r#"author //comment comment;
-age
+age;
 "#;
         let tokens = tokenize(source);
         let expected = vec![
@@ -398,12 +372,11 @@ age
     #[test]
     fn skips_comments_newline() {
         let source = r#"a//
-age
+age;
 "#;
         let tokens = tokenize(source);
         let expected = vec![
             Token::Identifier(0, 1),
-            Token::Semicolon,
             Token::Identifier(4, 7),
             Token::Semicolon,
         ];
@@ -413,7 +386,7 @@ age
     #[test]
     fn skips_shell_comments() {
         let source = r#"author #comment comment;
-age
+age;
 "#;
         let tokens = tokenize(source);
         let expected = vec![
@@ -428,7 +401,7 @@ age
     #[test]
     fn skips_lua_comments() {
         let source = r#"author --comment comment;
-age
+age;
 "#;
         let tokens = tokenize(source);
         let expected = vec![
@@ -472,37 +445,9 @@ age
     }
 
     #[test]
-    fn number_error_1() {
-        let tokens = tokenize("5.");
-        let expected = vec![Token::Float64(0, 2)];
-        assert_eq!(expected, tokens);
-    }
-
-    #[test]
-    fn number_error_2() {
-        let tokens = tokenize("5.a");
-        let expected = vec![
-            Token::Error("'.' must be followed by digit.", 0, 2),
-            Token::Identifier(2, 3),
-        ];
-        assert_eq!(expected, tokens);
-    }
-
-    #[test]
     fn no_newline_after_semicolon() {
         let tokens = tokenize(";\n");
         let expected = vec![Token::Semicolon];
-        assert_eq!(expected, tokens);
-    }
-
-    #[test]
-    fn newline_as_semicolon() {
-        let tokens = tokenize("a\nb");
-        let expected = vec![
-            Token::Identifier(0, 1),
-            Token::Semicolon,
-            Token::Identifier(2, 3),
-        ];
         assert_eq!(expected, tokens);
     }
 
@@ -519,11 +464,19 @@ age
 
     #[test]
     fn semicolon() {
-        let tokens = tokenize(
-            r#"author "Kirill Vasiltsov";
-year 2020;"#,
-        );
-        let expected = vec![Token::Identifier(0, 1), Token::Semicolon];
+        let tokens = tokenize(r#"author "Kirill Vasiltsov";"#);
+        let expected = vec![
+            Token::Identifier(0, 6),
+            Token::String(8, 24),
+            Token::Semicolon,
+        ];
+        assert_eq!(expected, tokens);
+    }
+
+    #[test]
+    fn empty() {
+        let tokens = tokenize("");
+        let expected: Vec<Token> = vec![];
         assert_eq!(expected, tokens);
     }
 }
