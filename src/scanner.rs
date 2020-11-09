@@ -325,8 +325,13 @@ mod tests {
 
     #[test]
     fn scan_64_floats() {
-        let tokens = tokenize("1.2 2.4");
-        let expected = vec![Token::Float64(0, 3), Token::Float64(4, 7)];
+        let tokens = tokenize("1.2 3.4 5.6e1 7.8e+12");
+        let expected = vec![
+            Token::Float64(0, 3),
+            Token::Float64(4, 7),
+            Token::Float64(8, 13),
+            Token::Float64(14, 21),
+        ];
         assert_eq!(expected, tokens);
     }
 
