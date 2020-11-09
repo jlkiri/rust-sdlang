@@ -9,20 +9,13 @@ pub enum Token {
     True,
     False,
     Null,
-    On,
-    Off,
     Equal,
     Semicolon,
-    Error(&'static str),
+    Error(&'static str, usize, usize),
     String(usize, usize),
     Identifier(usize, usize),
-    Float64Double(usize, usize),
-    Date(usize, usize),
-    Decimal128(usize, usize),
-    Number(usize, usize),
     Float64(usize, usize),
-    Float32(usize, usize),
-    Long(usize, usize),
+    Integer(usize, usize),
 }
 
 pub struct Scanner<'a> {
@@ -174,8 +167,6 @@ impl<'a> Scanner<'a> {
             't' if self.matches_source(start + 1, end, 3, "rue") => Token::True,
             'f' if self.matches_source(start + 1, end, 4, "alse") => Token::False,
             'n' if self.matches_source(start + 1, end, 3, "ull") => Token::Null,
-            'o' if end - start > 1 && self.matches_source(start + 1, end, 1, "n") => Token::On,
-            'o' if end - start > 1 && self.matches_source(start + 1, end, 2, "ff") => Token::Off,
             _ => Token::Identifier(start, end),
         }
     }
@@ -188,6 +179,55 @@ impl<'a> Scanner<'a> {
         self.try_keyword()
     }
 
+    fn make_error(&mut self, msg: &'static str) -> Token {
+        let (start, end) = self.range();
+        Token::Error(msg, start, end)
+    }
+
+    fn float(&mut self) -> Token {
+        self.advance();
+
+        let (start, end) = self.range();
+
+        match self.peek().map(|(_, c)| c) {
+            Some(ch) if !ch.is_digit(10) => {
+                Token::Error("'.' must be followed by digit.", start, end)
+            }
+            Some(_) => {
+                while self.is_digit(self.peek()) {
+                    self.advance();
+                }
+
+                if let Some((_, ch)) = self.peek() {
+                    if ch == 'e' || ch == 'E' {
+                        self.advance();
+
+                        if let Some((_, ch)) = self.peek() {
+                            if ch == '+' || ch == '-' {
+                                self.advance();
+
+                                while self.is_digit(self.peek()) {
+                                    self.advance();
+                                }
+                            }
+
+                            while self.is_digit(self.peek()) {
+                                self.advance();
+                            }
+                        } else {
+                            return self.make_error("Illegal float.");
+                        }
+                    }
+                }
+
+                let (start, end) = self.range();
+
+                return Token::Float64(start, end);
+            }
+            _ => Token::Float64(start, end),
+        }
+    }
+
     fn number(&mut self) -> Token {
         while self.is_digit(self.peek()) {
             self.advance();
@@ -195,78 +235,9 @@ impl<'a> Scanner<'a> {
 
         let (start, end) = self.range();
 
-        if self.match_char('L') {
-            return Token::Long(start, end + 1);
-        }
-
         match self.peek() {
-            Some((_, '.')) => {
-                if let Some((_, next)) = self.peek_next() {
-                    if (*next).is_digit(10) {
-                        self.advance();
-
-                        while self.is_digit(self.peek()) {
-                            self.advance();
-                        }
-
-                        let (start, end) = self.range();
-
-                        if self.match_char('d') {
-                            return Token::Float64(start, end + 1);
-                        }
-
-                        if self.match_char('f') {
-                            return Token::Float32(start, end + 1);
-                        }
-
-                        if self.match_char('B') {
-                            match self.peek().map(|(_, c)| c) {
-                                Some(c) if c == 'D' => {
-                                    self.advance();
-                                    return Token::Decimal128(start, end + 2);
-                                }
-                                _ => return Token::Error("Unknown number type B."),
-                            }
-                        }
-
-                        return Token::Float64Double(start, end);
-                    }
-
-                    return Token::Error("'.' must be followed by digit.");
-                }
-
-                Token::Error("Number cannot end with '.'")
-            }
-            Some((_, '/')) | Some((_, ':')) => match self.peek_next().map(|(_, c)| c) {
-                Some(next) if (*next).is_digit(10) => {
-                    self.advance();
-
-                    while !self.is_whitespace(self.peek()) {
-                        self.advance();
-                    }
-
-                    match self.peek_next().map(|(_, c)| c) {
-                        Some(next) if (*next).is_digit(10) => {
-                            self.advance();
-
-                            while !self.is_whitespace(self.peek()) {
-                                self.advance();
-                            }
-
-                            let (start, end) = self.range();
-
-                            return Token::Date(start, end);
-                        }
-                        _ => (),
-                    }
-
-                    let (start, end) = self.range();
-
-                    Token::Date(start, end)
-                }
-                _ => Token::Error("Invalid date."),
-            },
-            _ => Token::Number(start, end),
+            Some((_, '.')) => self.float(),
+            _ => Token::Integer(start, end),
         }
     }
 
@@ -282,7 +253,7 @@ impl<'a> Scanner<'a> {
 
         // Consume '"'
         match self.advance() {
-            None => return Token::Error("Unterminated string."),
+            None => return self.make_error("Unterminated string."),
             _ => (),
         }
 
@@ -322,7 +293,7 @@ impl<'a> Scanner<'a> {
                         Some(Token::Semicolon)
                     }
                     '\n' => Some(Token::Semicolon),
-                    _ => Some(Token::Error("Unexpected character.")),
+                    _ => Some(self.make_error("Unexpected character.")),
                 }
             }
             None => None,
@@ -348,42 +319,14 @@ mod tests {
     #[test]
     fn scan_integers() {
         let tokens = tokenize("1");
-        let expected = vec![Token::Number(0, 1)];
-        assert_eq!(expected, tokens);
-    }
-
-    #[test]
-    fn scan_64_double_floats() {
-        let tokens = tokenize("1.567");
-        let expected = vec![Token::Float64Double(0, 5)];
+        let expected = vec![Token::Integer(0, 1)];
         assert_eq!(expected, tokens);
     }
 
     #[test]
     fn scan_64_floats() {
-        let tokens = tokenize("1.567d");
-        let expected = vec![Token::Float64(0, 6)];
-        assert_eq!(expected, tokens);
-    }
-
-    #[test]
-    fn scan_32_floats() {
-        let tokens = tokenize("1.567f");
-        let expected = vec![Token::Float32(0, 6)];
-        assert_eq!(expected, tokens);
-    }
-
-    #[test]
-    fn scan_long() {
-        let tokens = tokenize("155L");
-        let expected = vec![Token::Long(0, 4)];
-        assert_eq!(expected, tokens);
-    }
-
-    #[test]
-    fn scan_128_decimal() {
-        let tokens = tokenize("155.8BD");
-        let expected = vec![Token::Decimal128(0, 7)];
+        let tokens = tokenize("1.2 2.4");
+        let expected = vec![Token::Float64(0, 3), Token::Float64(4, 7)];
         assert_eq!(expected, tokens);
     }
 
@@ -507,50 +450,9 @@ age
     }
 
     #[test]
-    fn scan_time() {
-        let source = "13:23:34";
-        let tokens = tokenize(source);
-        let expected = vec![Token::Date(0, 8)];
-        assert_eq!(expected, tokens);
-    }
-
-    #[test]
-    fn scan_date_1() {
-        let source = "2015/12/06 12:00:00.000-UTC attr";
-        let tokens = tokenize(source);
-        let expected = vec![Token::Date(0, 27), Token::Identifier(28, 32)];
-        assert_eq!(expected, tokens);
-    }
-
-    #[test]
-    fn scan_date_2() {
-        let source = "2015/12/06 12:00:00.000 attr";
-        let tokens = tokenize(source);
-        let expected = vec![Token::Date(0, 23), Token::Identifier(24, 28)];
-        assert_eq!(expected, tokens);
-    }
-
-    #[test]
     fn scan_keywords() {
-        let tokens = tokenize("off on true false null");
-        let expected = vec![
-            Token::Off,
-            Token::On,
-            Token::True,
-            Token::False,
-            Token::Null,
-        ];
-        assert_eq!(expected, tokens);
-    }
-
-    #[test]
-    fn date_error() {
-        let tokens = tokenize("2015/a");
-        let expected = vec![
-            Token::Error("Invalid date."),
-            Token::Error("Unexpected character."),
-            Token::Identifier(5, 6),
-        ];
+        let tokens = tokenize("true false null");
+        let expected = vec![Token::True, Token::False, Token::Null];
         assert_eq!(expected, tokens);
     }
 
@@ -558,7 +460,7 @@ age
     fn forward_slash_error() {
         let tokens = tokenize("/a");
         let expected = vec![
-            Token::Error("Unexpected character."),
+            Token::Error("Unexpected character.", 0, 1),
             Token::Identifier(1, 2),
         ];
         assert_eq!(expected, tokens);
@@ -567,10 +469,7 @@ age
     #[test]
     fn number_error_1() {
         let tokens = tokenize("5.");
-        let expected = vec![
-            Token::Error("Number cannot end with '.'"),
-            Token::Error("Unexpected character."),
-        ];
+        let expected = vec![Token::Float64(0, 2)];
         assert_eq!(expected, tokens);
     }
 
@@ -578,19 +477,8 @@ age
     fn number_error_2() {
         let tokens = tokenize("5.a");
         let expected = vec![
-            Token::Error("'.' must be followed by digit."),
-            Token::Error("Unexpected character."),
+            Token::Error("'.' must be followed by digit.", 0, 2),
             Token::Identifier(2, 3),
-        ];
-        assert_eq!(expected, tokens);
-    }
-
-    #[test]
-    fn number_error_3() {
-        let tokens = tokenize("5.3BF");
-        let expected = vec![
-            Token::Error("Unknown number type B."),
-            Token::Identifier(4, 5),
         ];
         assert_eq!(expected, tokens);
     }
