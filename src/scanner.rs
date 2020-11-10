@@ -2,45 +2,47 @@ use std::iter::Peekable;
 use std::str::CharIndices;
 
 type Index = usize;
+type Line = usize;
 type Char = (Index, char);
 
 #[derive(Debug, PartialEq)]
 pub enum Token {
-    True(usize, usize),
-    False(usize, usize),
-    Null(usize, usize),
-    Equal(usize, usize),
-    Semicolon(usize, usize),
-    LeftBrace(usize, usize),
-    RightBrace(usize, usize),
-    Error(&'static str, usize, usize),
-    String(usize, usize),
-    Identifier(usize, usize),
-    Float64(usize, usize),
-    Integer(usize, usize),
+    True(usize, usize, Line),
+    False(usize, usize, Line),
+    Null(usize, usize, Line),
+    Equal(usize, usize, Line),
+    Semicolon(usize, usize, Line),
+    LeftBrace(usize, usize, Line),
+    RightBrace(usize, usize, Line),
+    Error(&'static str, usize, usize, Line),
+    String(usize, usize, Line),
+    Identifier(usize, usize, Line),
+    Float64(usize, usize, Line),
+    Integer(usize, usize, Line),
 }
 
 impl Token {
-    pub fn position(&self) -> (usize, usize) {
+    pub fn position(&self) -> (usize, usize, usize) {
         match self {
-            Token::True(s, e)
-            | Token::False(s, e)
-            | Token::Null(s, e)
-            | Token::Equal(s, e)
-            | Token::Semicolon(s, e)
-            | Token::LeftBrace(s, e)
-            | Token::RightBrace(s, e)
-            | Token::String(s, e)
-            | Token::Identifier(s, e)
-            | Token::Float64(s, e)
-            | Token::Integer(s, e)
-            | Token::Error(_, s, e) => (*s, *e),
+            Token::True(s, e, l)
+            | Token::False(s, e, l)
+            | Token::Null(s, e, l)
+            | Token::Equal(s, e, l)
+            | Token::Semicolon(s, e, l)
+            | Token::LeftBrace(s, e, l)
+            | Token::RightBrace(s, e, l)
+            | Token::String(s, e, l)
+            | Token::Identifier(s, e, l)
+            | Token::Float64(s, e, l)
+            | Token::Integer(s, e, l)
+            | Token::Error(_, s, e, l) => (*s, *e, *l),
         }
     }
 }
 
 pub struct Scanner<'a> {
     source: &'a str,
+    line: usize,
     start: Option<Char>,
     current: Option<Char>,
     scanner: Peekable<CharIndices<'a>>,
@@ -62,6 +64,7 @@ impl<'a> Scanner<'a> {
             source,
             start: first_char,
             current: first_char,
+            line: 0,
             scanner,
         }
     }
@@ -83,7 +86,11 @@ impl<'a> Scanner<'a> {
     fn skip_whitespace(&mut self) {
         while let Some((_, ch)) = self.peek() {
             match ch {
-                ' ' | '\t' | '\n' | '\r' => {
+                ' ' | '\t' | '\r' => {
+                    self.advance();
+                }
+                '\n' => {
+                    self.line += 1;
                     self.advance();
                 }
                 '/' => match self.peek_next() {
@@ -132,14 +139,14 @@ impl<'a> Scanner<'a> {
         }
     }
 
-    fn range(&self) -> (usize, usize) {
+    fn range(&self) -> (usize, usize, usize) {
         let (start, _) = self.start.unwrap();
         let end = match self.current {
             Some((index, _)) => index,
             None => self.source.len(),
         };
 
-        (start, end)
+        (start, end, self.line)
     }
 
     fn is_alpha(&self, chr: Option<Char>) -> bool {
@@ -163,13 +170,13 @@ impl<'a> Scanner<'a> {
 
     fn try_keyword(&self) -> Token {
         let (_, ch) = self.start.unwrap();
-        let (start, end) = self.range();
+        let (start, end, line) = self.range();
 
         match ch {
-            't' if self.matches_source(start + 1, end, 3, "rue") => Token::True(start, end),
-            'f' if self.matches_source(start + 1, end, 4, "alse") => Token::False(start, end),
-            'n' if self.matches_source(start + 1, end, 3, "ull") => Token::Null(start, end),
-            _ => Token::Identifier(start, end),
+            't' if self.matches_source(start + 1, end, 3, "rue") => Token::True(start, end, line),
+            'f' if self.matches_source(start + 1, end, 4, "alse") => Token::False(start, end, line),
+            'n' if self.matches_source(start + 1, end, 3, "ull") => Token::Null(start, end, line),
+            _ => Token::Identifier(start, end, line),
         }
     }
 
@@ -182,8 +189,8 @@ impl<'a> Scanner<'a> {
     }
 
     fn make_error(&mut self, msg: &'static str) -> Token {
-        let (start, end) = self.range();
-        Token::Error(msg, start, end)
+        let (start, end, line) = self.range();
+        Token::Error(msg, start, end, line)
     }
 
     fn float(&mut self) -> Token {
@@ -218,9 +225,9 @@ impl<'a> Scanner<'a> {
                     }
                 }
 
-                let (start, end) = self.range();
+                let (start, end, line) = self.range();
 
-                return Token::Float64(start, end);
+                return Token::Float64(start, end, line);
             }
             _ => self.make_error("'.' must be followed by digit."),
         }
@@ -231,11 +238,11 @@ impl<'a> Scanner<'a> {
             self.advance();
         }
 
-        let (start, end) = self.range();
+        let (start, end, line) = self.range();
 
         match self.peek() {
             Some((_, '.')) => self.float(),
-            _ => Token::Integer(start, end),
+            _ => Token::Integer(start, end, line),
         }
     }
 
@@ -255,9 +262,9 @@ impl<'a> Scanner<'a> {
             _ => (),
         }
 
-        let (start, end) = self.range();
+        let (start, end, line) = self.range();
 
-        Token::String(start + 1, end - 1)
+        Token::String(start + 1, end - 1, line)
     }
 
     pub fn source_slice(&self, start: usize, end: usize) -> &str {
@@ -279,14 +286,14 @@ impl<'a> Scanner<'a> {
                     return Some(self.number());
                 }
 
-                let (start, end) = self.range();
+                let (start, end, line) = self.range();
 
                 match ch {
                     '"' => Some(self.string()),
-                    '=' => Some(Token::Equal(start, end)),
-                    ';' => Some(Token::Semicolon(start, end)),
-                    '{' => Some(Token::LeftBrace(start, end)),
-                    '}' => Some(Token::RightBrace(start, end)),
+                    '=' => Some(Token::Equal(start, end, line)),
+                    ';' => Some(Token::Semicolon(start, end, line)),
+                    '{' => Some(Token::LeftBrace(start, end, line)),
+                    '}' => Some(Token::RightBrace(start, end, line)),
                     _ => Some(self.make_error("Unexpected character.")),
                 }
             }
@@ -319,7 +326,7 @@ mod tests {
 
     #[test]
     fn scan_integers() {
-        test!("1", vec![Token::Integer(0, 1)]);
+        test!("1", vec![Token::Integer(0, 1, 0)]);
     }
 
     #[test]
@@ -327,10 +334,10 @@ mod tests {
         test!(
             "1.2 3.4 5.6e1 7.8e+12",
             vec![
-                Token::Float64(0, 3),
-                Token::Float64(4, 7),
-                Token::Float64(8, 13),
-                Token::Float64(14, 21),
+                Token::Float64(0, 3, 0),
+                Token::Float64(4, 7, 0),
+                Token::Float64(8, 13, 0),
+                Token::Float64(14, 21, 0),
             ]
         );
     }
@@ -339,7 +346,7 @@ mod tests {
     fn scan_64_float_error() {
         test!(
             "1.",
-            vec![Token::Error("'.' must be followed by digit.", 0, 2)]
+            vec![Token::Error("'.' must be followed by digit.", 0, 2, 0)]
         );
     }
 
@@ -348,20 +355,20 @@ mod tests {
         test!(
             "5.a",
             vec![
-                Token::Error("'.' must be followed by digit.", 0, 2),
-                Token::Identifier(2, 3),
+                Token::Error("'.' must be followed by digit.", 0, 2, 0),
+                Token::Identifier(2, 3, 0),
             ]
         );
     }
 
     #[test]
     fn scan_string() {
-        test!(r#""hello""#, vec![Token::String(1, 6)]);
+        test!(r#""hello""#, vec![Token::String(1, 6, 0)]);
     }
 
     #[test]
     fn scan_identifier() {
-        test!("author", vec![Token::Identifier(0, 6)]);
+        test!("author", vec![Token::Identifier(0, 6, 0)]);
     }
 
     #[test]
@@ -372,10 +379,10 @@ age;
         test!(
             source,
             vec![
-                Token::Identifier(0, 6),
-                Token::Semicolon(24, 25),
-                Token::Identifier(26, 29),
-                Token::Semicolon(29, 30),
+                Token::Identifier(0, 6, 0),
+                Token::Semicolon(24, 25, 0),
+                Token::Identifier(26, 29, 1),
+                Token::Semicolon(29, 30, 1),
             ]
         );
     }
@@ -388,9 +395,9 @@ age;
         test!(
             source,
             vec![
-                Token::Identifier(0, 1),
-                Token::Identifier(4, 7),
-                Token::Semicolon(7, 8),
+                Token::Identifier(0, 1, 0),
+                Token::Identifier(4, 7, 1),
+                Token::Semicolon(7, 8, 1),
             ]
         );
     }
@@ -403,10 +410,10 @@ age;
         test!(
             source,
             vec![
-                Token::Identifier(0, 6),
-                Token::Semicolon(23, 24),
-                Token::Identifier(25, 28),
-                Token::Semicolon(28, 29),
+                Token::Identifier(0, 6, 0),
+                Token::Semicolon(23, 24, 0),
+                Token::Identifier(25, 28, 1),
+                Token::Semicolon(28, 29, 1),
             ]
         );
     }
@@ -419,10 +426,10 @@ age;
         test!(
             source,
             vec![
-                Token::Identifier(0, 6),
-                Token::Semicolon(24, 25),
-                Token::Identifier(26, 29),
-                Token::Semicolon(29, 30),
+                Token::Identifier(0, 6, 0),
+                Token::Semicolon(24, 25, 0),
+                Token::Identifier(26, 29, 1),
+                Token::Semicolon(29, 30, 1),
             ]
         );
     }
@@ -432,9 +439,9 @@ age;
         test!(
             "private=true",
             vec![
-                Token::Identifier(0, 7),
-                Token::Equal(7, 8),
-                Token::True(8, 12)
+                Token::Identifier(0, 7, 0),
+                Token::Equal(7, 8, 0),
+                Token::True(8, 12, 0)
             ]
         );
     }
@@ -444,9 +451,9 @@ age;
         test!(
             r#"platform="darwin""#,
             vec![
-                Token::Identifier(0, 8),
-                Token::Equal(8, 9),
-                Token::String(10, 16)
+                Token::Identifier(0, 8, 0),
+                Token::Equal(8, 9, 0),
+                Token::String(10, 16, 0)
             ]
         );
     }
@@ -455,7 +462,11 @@ age;
     fn scan_keywords() {
         test!(
             "true false null",
-            vec![Token::True(0, 4), Token::False(5, 10), Token::Null(11, 15)]
+            vec![
+                Token::True(0, 4, 0),
+                Token::False(5, 10, 0),
+                Token::Null(11, 15, 0)
+            ]
         );
     }
 
@@ -464,8 +475,8 @@ age;
         test!(
             "/a",
             vec![
-                Token::Error("Unexpected character.", 0, 1),
-                Token::Identifier(1, 2),
+                Token::Error("Unexpected character.", 0, 1, 0),
+                Token::Identifier(1, 2, 0),
             ]
         );
     }
@@ -475,9 +486,9 @@ age;
         test!(
             "a ; b",
             vec![
-                Token::Identifier(0, 1),
-                Token::Semicolon(2, 3),
-                Token::Identifier(4, 5),
+                Token::Identifier(0, 1, 0),
+                Token::Semicolon(2, 3, 0),
+                Token::Identifier(4, 5, 0),
             ]
         );
     }
@@ -487,9 +498,9 @@ age;
         test!(
             r#"author "Kirill Vasiltsov";"#,
             vec![
-                Token::Identifier(0, 6),
-                Token::String(8, 24),
-                Token::Semicolon(25, 26),
+                Token::Identifier(0, 6, 0),
+                Token::String(8, 24, 0),
+                Token::Semicolon(25, 26, 0),
             ]
         );
     }

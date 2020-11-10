@@ -29,7 +29,8 @@ impl Tag {
     }
 }
 
-struct Error(&'static str, usize, usize);
+#[derive(Debug)]
+struct Error(&'static str, usize, usize, usize);
 
 pub struct Parser<'a> {
     scanner: &'a mut Scanner<'a>,
@@ -73,21 +74,21 @@ impl<'a> Parser<'a> {
 
     fn identifier(&mut self) -> Result<String, Error> {
         match self.current {
-            Some(Token::Identifier(s, e)) => {
+            Some(Token::Identifier(s, e, _)) => {
                 self.advance();
                 Ok(String::from(self.scanner.source_slice(s, e)))
             }
-            Some(Token::Error(msg, s, e)) => Err(Error(msg, s, e)),
+            Some(Token::Error(msg, s, e, l)) => Err(Error(msg, s, e, l)),
             Some(ref t) => {
-                let (start, end) = t.position();
-                Err(Error("Expect identifier.", start, end))
+                let (start, end, line) = t.position();
+                Err(Error("Invalid identifier.", start, end, line))
             }
             None => match self.previous {
                 Some(ref p) => {
-                    let (start, end) = p.position();
-                    Err(Error("Expect identifier.", start, end))
+                    let (start, end, line) = p.position();
+                    Err(Error("Expect identifier.", start, end, line))
                 }
-                _ => Err(Error("Expect identifier.", 0, 0)),
+                _ => Err(Error("Expect identifier.", 0, 0, 0)),
             },
         }
     }
@@ -114,10 +115,29 @@ impl<'a> Parser<'a> {
 
     pub fn parse(mut self) -> Vec<Tag> {
         while self.current.is_some() {
-            println!("LOOOOOOOOOOOOOOoop");
             match self.tag_declaration() {
                 Ok(tag) => self.tags.push(tag),
-                Err(e) => panic!(e),
+                Err(Error(msg, start, end, line)) => {
+                    let mut report = String::new();
+                    let lctx = start - if start < 5 { 0 } else { start - 30 };
+                    let right_context = self.scanner.source_slice(end, end + 20);
+                    let left_context = self.scanner.source_slice(lctx, start);
+                    report.push_str(format!("Parse error at line {}: {}\n", line, msg).as_str());
+                    report.push_str("   |\n");
+                    report.push_str(
+                        format!(
+                            "{}  | {}{}{}\n",
+                            line,
+                            left_context,
+                            self.scanner.source_slice(start, end),
+                            right_context
+                        )
+                        .as_str(),
+                    );
+                    print!("{}", report);
+                    println!("   |{}\n", format!("{:>w$}", "^", w = lctx + 2));
+                    break;
+                }
             }
         }
         self.tags
