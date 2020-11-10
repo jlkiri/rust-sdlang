@@ -1,18 +1,20 @@
 use crate::scanner::*;
 use std::collections::HashMap;
 
-#[derive(Clone, Debug)]
-pub enum Literal {
-    Float32(f32),
-    Float64(f64),
-    Integer(i32),
+#[derive(Debug)]
+enum Value {
     String(String),
+    Integer(i32),
+    Float(f64),
+    Boolean(bool),
+    Null,
 }
 
-#[derive(Clone, Debug)]
-pub enum Value {
-    Literal(Literal),
-    Null,
+struct Tag {
+    name: String,
+    values: Vec<Value>,
+    attributes: HashMap<String, Value>,
+    children: Vec<Tag>,
 }
 
 pub struct Parser<'a> {
@@ -20,26 +22,28 @@ pub struct Parser<'a> {
     previous: Option<Token>,
     current: Option<Token>,
     panic_mode: bool,
-    nodes: HashMap<String, Value>,
+    current_tag: Option<Tag>,
+    tags: Vec<Tag>,
 }
 
 impl<'a> Parser<'a> {
     pub fn new(scanner: &'a mut Scanner<'a>) -> Self {
         let previous = None;
-        let current = scanner.scan_token();
+        let current = scanner.next();
         Parser {
             scanner,
             previous,
             current,
             panic_mode: false,
-            nodes: HashMap::new(),
+            tags: vec![],
+            current_tag: None,
         }
     }
 
-    fn consume(&self, token: Token) {
-        match token {
-            Token::Semicolon => (),
-            _ => panic!(),
+    fn consume(&self, token: Token, msg: &'static str) -> Result<Option<Token>, &str> {
+        match self.current {
+            Some(t) if t == token => Ok(self.advance()),
+            _ => Err(msg),
         }
     }
 
@@ -53,8 +57,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn declaration(&mut self) {
-        self.node_definition();
+    fn tag_declaration(&mut self) {
         match self.current {
             Some(Token::Semicolon) => {
                 println!("detected semicolon");
@@ -66,23 +69,18 @@ impl<'a> Parser<'a> {
     }
 
     fn advance(&mut self) -> Option<Token> {
-        println!("advancing...");
-        let previous = self.current.take();
-        println!("previous: {:#?}", previous);
-        self.current = self.scanner.scan_token();
-        println!("current: {:#?}", self.current);
-        previous
+        self.scanner.next()
     }
 
-    fn node_definition(&mut self) {
+    /* fn node_definition(&mut self) {
         let key = self.identifier();
         let attr = self.attribute();
 
         println!("parsed definition");
 
         self.nodes.insert(key, attr);
-    }
-
+    } */
+    /*
     fn assignee(&mut self) -> Value {
         // if (self.match_token(match_token))
         match self.current {
@@ -95,9 +93,9 @@ impl<'a> Parser<'a> {
             Some(_) => self.literal(),
             None => panic!(),
         }
-    }
+    } */
 
-    fn attribute(&mut self) -> Value {
+    /* fn attribute(&mut self) -> Value {
         let assignee = self.assignee();
 
         /*  match self.current {
@@ -110,7 +108,7 @@ impl<'a> Parser<'a> {
         } */
 
         assignee
-    }
+    } */
 
     fn peek(&self) -> Option<&Token> {
         self.current.as_ref()
@@ -126,7 +124,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn literal(&mut self) -> Value {
+    /* fn literal(&mut self) -> Value {
         match self.peek() {
             Some(Token::Float64(s, e)) => {
                 // self.advance();
@@ -148,12 +146,12 @@ impl<'a> Parser<'a> {
             } */
             _ => unimplemented!(),
         }
-    }
+    } */
 
-    pub fn parse(mut self) -> HashMap<String, Value> {
-        while let Some(_) = self.current {
-            self.declaration();
+    pub fn parse(mut self) -> Vec<Tag> {
+        while self.current.is_some() {
+            self.tag_declaration();
         }
-        self.nodes
+        self.tags
     }
 }

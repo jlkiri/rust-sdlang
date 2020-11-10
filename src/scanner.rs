@@ -27,6 +27,14 @@ pub struct Scanner<'a> {
     scanner: Peekable<CharIndices<'a>>,
 }
 
+impl<'a> Iterator for Scanner<'a> {
+    type Item = Token;
+
+    fn next(&mut self) -> Option<Token> {
+        self.scan_token()
+    }
+}
+
 impl<'a> Scanner<'a> {
     pub fn new(source: &'a str) -> Self {
         let mut scanner = source.char_indices().peekable();
