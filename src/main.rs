@@ -12,15 +12,12 @@ fn main() -> std::io::Result<()> {
 
     let source = std::fs::read_to_string(cwd)?;
 
-    let ref mut scanner = Scanner::new(
-        r#"author "Kirill Vasiltsov";
-year 2020.3f;"#,
-    );
+    let ref mut scanner = Scanner::new("author");
 
     let parser = Parser::new(scanner);
-    let nodes = parser.parse();
+    let tags = parser.parse();
 
-    println!("{:?}", nodes);
+    println!("{:#?}", tags);
 
     Ok(())
 }

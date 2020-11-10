@@ -2,7 +2,7 @@ use crate::scanner::*;
 use std::collections::HashMap;
 
 #[derive(Debug)]
-enum Value {
+pub enum Value {
     String(String),
     Integer(i32),
     Float(f64),
@@ -10,12 +10,26 @@ enum Value {
     Null,
 }
 
-struct Tag {
+#[derive(Debug)]
+pub struct Tag {
     name: String,
     values: Vec<Value>,
     attributes: HashMap<String, Value>,
     children: Vec<Tag>,
 }
+
+impl Tag {
+    pub fn new(name: String) -> Self {
+        Self {
+            name,
+            values: Vec::new(),
+            children: Vec::new(),
+            attributes: HashMap::new(),
+        }
+    }
+}
+
+struct Error(&'static str, usize, usize);
 
 pub struct Parser<'a> {
     scanner: &'a mut Scanner<'a>,
@@ -40,9 +54,9 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn consume(&self, token: Token, msg: &'static str) -> Result<Option<Token>, &str> {
-        match self.current {
-            Some(t) if t == token => Ok(self.advance()),
+    fn consume(&mut self, token: Token, msg: &'static str) -> Result<Option<Token>, &str> {
+        match &self.current {
+            Some(t) if *t == token => Ok(self.advance()),
             _ => Err(msg),
         }
     }
@@ -57,100 +71,54 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn tag_declaration(&mut self) {
+    fn identifier(&mut self) -> Result<String, Error> {
         match self.current {
-            Some(Token::Semicolon) => {
-                println!("detected semicolon");
+            Some(Token::Identifier(s, e)) => {
                 self.advance();
-                println!("current after advance: {:#?}", self.current);
+                Ok(String::from(self.scanner.source_slice(s, e)))
             }
-            _ => panic!(),
+            Some(Token::Error(msg, s, e)) => Err(Error(msg, s, e)),
+            Some(ref t) => {
+                let (start, end) = t.position();
+                Err(Error("Expect identifier.", start, end))
+            }
+            None => match self.previous {
+                Some(ref p) => {
+                    let (start, end) = p.position();
+                    Err(Error("Expect identifier.", start, end))
+                }
+                _ => Err(Error("Expect identifier.", 0, 0)),
+            },
+        }
+    }
+
+    fn tag_declaration(&mut self) -> Result<Tag, Error> {
+        match self.identifier() {
+            Ok(name) => {
+                let tag = Tag::new(name);
+                Ok(tag)
+            }
+            Err(e) => Err(e),
         }
     }
 
     fn advance(&mut self) -> Option<Token> {
-        self.scanner.next()
+        let previous = self.current.take();
+        self.current = self.scanner.next();
+        previous
     }
-
-    /* fn node_definition(&mut self) {
-        let key = self.identifier();
-        let attr = self.attribute();
-
-        println!("parsed definition");
-
-        self.nodes.insert(key, attr);
-    } */
-    /*
-    fn assignee(&mut self) -> Value {
-        // if (self.match_token(match_token))
-        match self.current {
-            Some(Token::Identifier(s, e)) => {
-                self.advance();
-                Value::Literal(Literal::String(String::from(
-                    self.scanner.source_slice(s, e),
-                )))
-            }
-            Some(_) => self.literal(),
-            None => panic!(),
-        }
-    } */
-
-    /* fn attribute(&mut self) -> Value {
-        let assignee = self.assignee();
-
-        /*  match self.current {
-          Some(Token::Equal) => {
-            // If previous is not identifier - panic!
-            self.advance();
-            self.literal()
-          }
-          _ => (),
-        } */
-
-        assignee
-    } */
 
     fn peek(&self) -> Option<&Token> {
         self.current.as_ref()
     }
 
-    fn identifier(&mut self) -> String {
-        match self.current {
-            Some(Token::Identifier(s, e)) => {
-                self.advance();
-                String::from(self.scanner.source_slice(s, e))
-            }
-            _ => panic!(),
-        }
-    }
-
-    /* fn literal(&mut self) -> Value {
-        match self.peek() {
-            Some(Token::Float64(s, e)) => {
-                // self.advance();
-                Value::Literal(Literal::Float64(
-                    self.scanner.source_slice(*s, e - 1).parse::<f64>().unwrap(),
-                ))
-            } /*
-            Some(Token::Integer(s, e)) => {
-            self.advance();
-            Value::Literal(Literal::Integer(
-            self.scanner.source_slice(s, e).parse::<i32>().unwrap(),
-            ))
-            }
-            Some(Token::String(s, e)) => {
-            self.advance();
-            Value::Literal(Literal::String(String::from(
-            self.scanner.source_slice(s, e),
-            )))
-            } */
-            _ => unimplemented!(),
-        }
-    } */
-
     pub fn parse(mut self) -> Vec<Tag> {
         while self.current.is_some() {
-            self.tag_declaration();
+            println!("LOOOOOOOOOOOOOOoop");
+            match self.tag_declaration() {
+                Ok(tag) => self.tags.push(tag),
+                Err(e) => panic!(e),
+            }
         }
         self.tags
     }

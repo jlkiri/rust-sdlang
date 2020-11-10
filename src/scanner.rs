@@ -6,18 +6,37 @@ type Char = (Index, char);
 
 #[derive(Debug, PartialEq)]
 pub enum Token {
-    True,
-    False,
-    Null,
-    Equal,
-    Semicolon,
-    LeftBrace,
-    RightBrace,
+    True(usize, usize),
+    False(usize, usize),
+    Null(usize, usize),
+    Equal(usize, usize),
+    Semicolon(usize, usize),
+    LeftBrace(usize, usize),
+    RightBrace(usize, usize),
     Error(&'static str, usize, usize),
     String(usize, usize),
     Identifier(usize, usize),
     Float64(usize, usize),
     Integer(usize, usize),
+}
+
+impl Token {
+    pub fn position(&self) -> (usize, usize) {
+        match self {
+            Token::True(s, e)
+            | Token::False(s, e)
+            | Token::Null(s, e)
+            | Token::Equal(s, e)
+            | Token::Semicolon(s, e)
+            | Token::LeftBrace(s, e)
+            | Token::RightBrace(s, e)
+            | Token::String(s, e)
+            | Token::Identifier(s, e)
+            | Token::Float64(s, e)
+            | Token::Integer(s, e)
+            | Token::Error(_, s, e) => (*s, *e),
+        }
+    }
 }
 
 pub struct Scanner<'a> {
@@ -147,9 +166,9 @@ impl<'a> Scanner<'a> {
         let (start, end) = self.range();
 
         match ch {
-            't' if self.matches_source(start + 1, end, 3, "rue") => Token::True,
-            'f' if self.matches_source(start + 1, end, 4, "alse") => Token::False,
-            'n' if self.matches_source(start + 1, end, 3, "ull") => Token::Null,
+            't' if self.matches_source(start + 1, end, 3, "rue") => Token::True(start, end),
+            'f' if self.matches_source(start + 1, end, 4, "alse") => Token::False(start, end),
+            'n' if self.matches_source(start + 1, end, 3, "ull") => Token::Null(start, end),
             _ => Token::Identifier(start, end),
         }
     }
@@ -260,12 +279,14 @@ impl<'a> Scanner<'a> {
                     return Some(self.number());
                 }
 
+                let (start, end) = self.range();
+
                 match ch {
                     '"' => Some(self.string()),
-                    '=' => Some(Token::Equal),
-                    ';' => Some(Token::Semicolon),
-                    '{' => Some(Token::LeftBrace),
-                    '}' => Some(Token::RightBrace),
+                    '=' => Some(Token::Equal(start, end)),
+                    ';' => Some(Token::Semicolon(start, end)),
+                    '{' => Some(Token::LeftBrace(start, end)),
+                    '}' => Some(Token::RightBrace(start, end)),
                     _ => Some(self.make_error("Unexpected character.")),
                 }
             }
@@ -352,9 +373,9 @@ age;
             source,
             vec![
                 Token::Identifier(0, 6),
-                Token::Semicolon,
+                Token::Semicolon(24, 25),
                 Token::Identifier(26, 29),
-                Token::Semicolon,
+                Token::Semicolon(29, 30),
             ]
         );
     }
@@ -369,7 +390,7 @@ age;
             vec![
                 Token::Identifier(0, 1),
                 Token::Identifier(4, 7),
-                Token::Semicolon,
+                Token::Semicolon(7, 8),
             ]
         );
     }
@@ -383,9 +404,9 @@ age;
             source,
             vec![
                 Token::Identifier(0, 6),
-                Token::Semicolon,
+                Token::Semicolon(23, 24),
                 Token::Identifier(25, 28),
-                Token::Semicolon,
+                Token::Semicolon(28, 29),
             ]
         );
     }
@@ -399,9 +420,9 @@ age;
             source,
             vec![
                 Token::Identifier(0, 6),
-                Token::Semicolon,
+                Token::Semicolon(24, 25),
                 Token::Identifier(26, 29),
-                Token::Semicolon,
+                Token::Semicolon(29, 30),
             ]
         );
     }
@@ -410,7 +431,11 @@ age;
     fn scan_attribute() {
         test!(
             "private=true",
-            vec![Token::Identifier(0, 7), Token::Equal, Token::True]
+            vec![
+                Token::Identifier(0, 7),
+                Token::Equal(7, 8),
+                Token::True(8, 12)
+            ]
         );
     }
 
@@ -418,7 +443,11 @@ age;
     fn scan_string_attribute() {
         test!(
             r#"platform="darwin""#,
-            vec![Token::Identifier(0, 8), Token::Equal, Token::String(10, 16)]
+            vec![
+                Token::Identifier(0, 8),
+                Token::Equal(8, 9),
+                Token::String(10, 16)
+            ]
         );
     }
 
@@ -426,7 +455,7 @@ age;
     fn scan_keywords() {
         test!(
             "true false null",
-            vec![Token::True, Token::False, Token::Null]
+            vec![Token::True(0, 4), Token::False(5, 10), Token::Null(11, 15)]
         );
     }
 
@@ -447,7 +476,7 @@ age;
             "a ; b",
             vec![
                 Token::Identifier(0, 1),
-                Token::Semicolon,
+                Token::Semicolon(2, 3),
                 Token::Identifier(4, 5),
             ]
         );
@@ -460,7 +489,7 @@ age;
             vec![
                 Token::Identifier(0, 6),
                 Token::String(8, 24),
-                Token::Semicolon,
+                Token::Semicolon(25, 26),
             ]
         );
     }
