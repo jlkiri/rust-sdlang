@@ -270,6 +270,13 @@ impl<'a> Scanner<'a> {
 mod tests {
     use super::*;
 
+    macro_rules! test {
+        ($source:expr, $exp:expr) => {
+            let tokens = tokenize($source);
+            assert_eq!($exp, tokens);
+        };
+    }
+
     fn tokenize(source: &str) -> Vec<Token> {
         let mut scanner = Scanner::new(source);
         let mut tokens: Vec<Token> = Vec::new();
@@ -283,52 +290,49 @@ mod tests {
 
     #[test]
     fn scan_integers() {
-        let tokens = tokenize("1");
-        let expected = vec![Token::Integer(0, 1)];
-        assert_eq!(expected, tokens);
+        test!("1", vec![Token::Integer(0, 1)]);
     }
 
     #[test]
     fn scan_64_floats() {
-        let tokens = tokenize("1.2 3.4 5.6e1 7.8e+12");
-        let expected = vec![
-            Token::Float64(0, 3),
-            Token::Float64(4, 7),
-            Token::Float64(8, 13),
-            Token::Float64(14, 21),
-        ];
-        assert_eq!(expected, tokens);
+        test!(
+            "1.2 3.4 5.6e1 7.8e+12",
+            vec![
+                Token::Float64(0, 3),
+                Token::Float64(4, 7),
+                Token::Float64(8, 13),
+                Token::Float64(14, 21),
+            ]
+        );
     }
 
     #[test]
     fn scan_64_float_error() {
-        let tokens = tokenize("1.");
-        let expected = vec![Token::Error("'.' must be followed by digit.", 0, 2)];
-        assert_eq!(expected, tokens);
+        test!(
+            "1.",
+            vec![Token::Error("'.' must be followed by digit.", 0, 2)]
+        );
     }
 
     #[test]
     fn scan_64_float_error_2() {
-        let tokens = tokenize("5.a");
-        let expected = vec![
-            Token::Error("'.' must be followed by digit.", 0, 2),
-            Token::Identifier(2, 3),
-        ];
-        assert_eq!(expected, tokens);
+        test!(
+            "5.a",
+            vec![
+                Token::Error("'.' must be followed by digit.", 0, 2),
+                Token::Identifier(2, 3),
+            ]
+        );
     }
 
     #[test]
     fn scan_string() {
-        let tokens = tokenize(r#""hello""#);
-        let expected = vec![Token::String(1, 6)];
-        assert_eq!(expected, tokens);
+        test!(r#""hello""#, vec![Token::String(1, 6)]);
     }
 
     #[test]
     fn scan_identifier() {
-        let tokens = tokenize("author");
-        let expected = vec![Token::Identifier(0, 6)];
-        assert_eq!(expected, tokens);
+        test!("author", vec![Token::Identifier(0, 6)]);
     }
 
     #[test]
@@ -336,14 +340,15 @@ mod tests {
         let source = r#"author //comment comment;
 age;
 "#;
-        let tokens = tokenize(source);
-        let expected = vec![
-            Token::Identifier(0, 6),
-            Token::Semicolon,
-            Token::Identifier(26, 29),
-            Token::Semicolon,
-        ];
-        assert_eq!(expected, tokens);
+        test!(
+            source,
+            vec![
+                Token::Identifier(0, 6),
+                Token::Semicolon,
+                Token::Identifier(26, 29),
+                Token::Semicolon,
+            ]
+        );
     }
 
     #[test]
@@ -351,13 +356,14 @@ age;
         let source = r#"a//
 age;
 "#;
-        let tokens = tokenize(source);
-        let expected = vec![
-            Token::Identifier(0, 1),
-            Token::Identifier(4, 7),
-            Token::Semicolon,
-        ];
-        assert_eq!(expected, tokens);
+        test!(
+            source,
+            vec![
+                Token::Identifier(0, 1),
+                Token::Identifier(4, 7),
+                Token::Semicolon,
+            ]
+        );
     }
 
     #[test]
@@ -365,14 +371,15 @@ age;
         let source = r#"author #comment comment;
 age;
 "#;
-        let tokens = tokenize(source);
-        let expected = vec![
-            Token::Identifier(0, 6),
-            Token::Semicolon,
-            Token::Identifier(25, 28),
-            Token::Semicolon,
-        ];
-        assert_eq!(expected, tokens);
+        test!(
+            source,
+            vec![
+                Token::Identifier(0, 6),
+                Token::Semicolon,
+                Token::Identifier(25, 28),
+                Token::Semicolon,
+            ]
+        );
     }
 
     #[test]
@@ -380,80 +387,78 @@ age;
         let source = r#"author --comment comment;
 age;
 "#;
-        let tokens = tokenize(source);
-        let expected = vec![
-            Token::Identifier(0, 6),
-            Token::Semicolon,
-            Token::Identifier(26, 29),
-            Token::Semicolon,
-        ];
-        assert_eq!(expected, tokens);
+        test!(
+            source,
+            vec![
+                Token::Identifier(0, 6),
+                Token::Semicolon,
+                Token::Identifier(26, 29),
+                Token::Semicolon,
+            ]
+        );
     }
 
     #[test]
     fn scan_attribute() {
-        let tokens = tokenize("private=true");
-        let expected = vec![Token::Identifier(0, 7), Token::Equal, Token::True];
-        assert_eq!(expected, tokens);
+        test!(
+            "private=true",
+            vec![Token::Identifier(0, 7), Token::Equal, Token::True]
+        );
     }
 
     #[test]
     fn scan_string_attribute() {
-        let tokens = tokenize(r#"platform="darwin""#);
-        let expected = vec![Token::Identifier(0, 8), Token::Equal, Token::String(10, 16)];
-        assert_eq!(expected, tokens);
+        test!(
+            r#"platform="darwin""#,
+            vec![Token::Identifier(0, 8), Token::Equal, Token::String(10, 16)]
+        );
     }
 
     #[test]
     fn scan_keywords() {
-        let tokens = tokenize("true false null");
-        let expected = vec![Token::True, Token::False, Token::Null];
-        assert_eq!(expected, tokens);
+        test!(
+            "true false null",
+            vec![Token::True, Token::False, Token::Null]
+        );
     }
 
     #[test]
     fn forward_slash_error() {
-        let tokens = tokenize("/a");
-        let expected = vec![
-            Token::Error("Unexpected character.", 0, 1),
-            Token::Identifier(1, 2),
-        ];
-        assert_eq!(expected, tokens);
-    }
-
-    #[test]
-    fn no_newline_after_semicolon() {
-        let tokens = tokenize(";\n");
-        let expected = vec![Token::Semicolon];
-        assert_eq!(expected, tokens);
+        test!(
+            "/a",
+            vec![
+                Token::Error("Unexpected character.", 0, 1),
+                Token::Identifier(1, 2),
+            ]
+        );
     }
 
     #[test]
     fn same_line_semicolon() {
-        let tokens = tokenize("a ; b");
-        let expected = vec![
-            Token::Identifier(0, 1),
-            Token::Semicolon,
-            Token::Identifier(4, 5),
-        ];
-        assert_eq!(expected, tokens);
+        test!(
+            "a ; b",
+            vec![
+                Token::Identifier(0, 1),
+                Token::Semicolon,
+                Token::Identifier(4, 5),
+            ]
+        );
     }
 
     #[test]
     fn semicolon() {
-        let tokens = tokenize(r#"author "Kirill Vasiltsov";"#);
-        let expected = vec![
-            Token::Identifier(0, 6),
-            Token::String(8, 24),
-            Token::Semicolon,
-        ];
-        assert_eq!(expected, tokens);
+        test!(
+            r#"author "Kirill Vasiltsov";"#,
+            vec![
+                Token::Identifier(0, 6),
+                Token::String(8, 24),
+                Token::Semicolon,
+            ]
+        );
     }
 
     #[test]
     fn empty() {
-        let tokens = tokenize("");
-        let expected: Vec<Token> = vec![];
-        assert_eq!(expected, tokens);
+        test!("", vec![] as Vec<Token>);
     }
 }

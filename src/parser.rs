@@ -44,8 +44,8 @@ impl<'a> Parser<'a> {
     }
 
     fn match_token(&mut self, token: Token) -> bool {
-        match self.current {
-            Some(t) if t == token => {
+        match &self.current {
+            Some(t) if *t == token => {
                 self.advance();
                 true
             }
@@ -112,8 +112,8 @@ impl<'a> Parser<'a> {
         assignee
     }
 
-    fn peek(&self) -> Option<Token> {
-        self.current
+    fn peek(&self) -> Option<&Token> {
+        self.current.as_ref()
     }
 
     fn identifier(&mut self) -> String {
@@ -129,23 +129,23 @@ impl<'a> Parser<'a> {
     fn literal(&mut self) -> Value {
         match self.peek() {
             Some(Token::Float64(s, e)) => {
-                self.advance();
+                // self.advance();
                 Value::Literal(Literal::Float64(
-                    self.scanner.source_slice(s, e - 1).parse::<f64>().unwrap(),
+                    self.scanner.source_slice(*s, e - 1).parse::<f64>().unwrap(),
                 ))
-            }
+            } /*
             Some(Token::Integer(s, e)) => {
-                self.advance();
-                Value::Literal(Literal::Integer(
-                    self.scanner.source_slice(s, e).parse::<i32>().unwrap(),
-                ))
+            self.advance();
+            Value::Literal(Literal::Integer(
+            self.scanner.source_slice(s, e).parse::<i32>().unwrap(),
+            ))
             }
             Some(Token::String(s, e)) => {
-                self.advance();
-                Value::Literal(Literal::String(String::from(
-                    self.scanner.source_slice(s, e),
-                )))
-            }
+            self.advance();
+            Value::Literal(Literal::String(String::from(
+            self.scanner.source_slice(s, e),
+            )))
+            } */
             _ => unimplemented!(),
         }
     }
