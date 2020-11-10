@@ -4,13 +4,15 @@ use std::str::CharIndices;
 type Index = usize;
 type Char = (Index, char);
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq)]
 pub enum Token {
     True,
     False,
     Null,
     Equal,
     Semicolon,
+    LeftBrace,
+    RightBrace,
     Error(&'static str, usize, usize),
     String(usize, usize),
     Identifier(usize, usize),
@@ -113,17 +115,6 @@ impl<'a> Scanner<'a> {
         (start, end)
     }
 
-    fn match_char(&mut self, target: char) -> bool {
-        if let Some(ch) = self.peek().map(|(_, c)| c) {
-            if ch == target {
-                self.advance();
-                return true;
-            }
-        }
-
-        false
-    }
-
     fn is_alpha(&self, chr: Option<Char>) -> bool {
         if let Some((_, ch)) = chr {
             return ch.is_ascii_alphabetic();
@@ -136,13 +127,6 @@ impl<'a> Scanner<'a> {
             return ch.is_digit(10);
         }
         false
-    }
-
-    fn is_whitespace(&self, chr: Option<Char>) -> bool {
-        if let Some((_, ch)) = chr {
-            return ch.is_whitespace();
-        }
-        true
     }
 
     fn matches_source(&self, start: usize, end: usize, len: usize, rest: &str) -> bool {
@@ -177,8 +161,6 @@ impl<'a> Scanner<'a> {
 
     fn float(&mut self) -> Token {
         self.advance();
-
-        let (start, end) = self.range();
 
         match self.peek().map(|(_, c)| c) {
             Some(ch) if !ch.is_digit(10) => self.make_error("'.' must be followed by digit."),
@@ -273,14 +255,9 @@ impl<'a> Scanner<'a> {
                 match ch {
                     '"' => Some(self.string()),
                     '=' => Some(Token::Equal),
-                    ';' => {
-                        if let Some((_, ch)) = self.peek() {
-                            if ch == '\n' {
-                                self.advance();
-                            }
-                        }
-                        Some(Token::Semicolon)
-                    }
+                    ';' => Some(Token::Semicolon),
+                    '{' => Some(Token::LeftBrace),
+                    '}' => Some(Token::RightBrace),
                     _ => Some(self.make_error("Unexpected character.")),
                 }
             }
