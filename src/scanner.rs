@@ -69,6 +69,10 @@ impl<'a> Scanner<'a> {
         }
     }
 
+    pub fn source_length(&self) -> usize {
+        self.source.len()
+    }
+
     fn advance(&mut self) -> Option<Char> {
         let current = self.current;
         self.current = self.scanner.next();

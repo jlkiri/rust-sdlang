@@ -119,23 +119,27 @@ impl<'a> Parser<'a> {
                 Ok(tag) => self.tags.push(tag),
                 Err(Error(msg, start, end, line)) => {
                     let mut report = String::new();
-                    let lctx = start - if start < 5 { 0 } else { start - 30 };
-                    let right_context = self.scanner.source_slice(end, end + 20);
-                    let left_context = self.scanner.source_slice(lctx, start);
+
+                    let before_newline: Vec<_> = self
+                        .scanner
+                        .source_slice(end, self.scanner.source_length())
+                        .split("\n")
+                        .collect();
+                    let rctx = before_newline.first().unwrap_or(&"");
+
                     report.push_str(format!("Parse error at line {}: {}\n", line, msg).as_str());
                     report.push_str("   |\n");
                     report.push_str(
                         format!(
-                            "{}  | {}{}{}\n",
+                            "{}  | {}{}\n",
                             line,
-                            left_context,
                             self.scanner.source_slice(start, end),
-                            right_context
+                            rctx
                         )
                         .as_str(),
                     );
                     print!("{}", report);
-                    println!("   |{}\n", format!("{:>w$}", "^", w = lctx + 2));
+                    println!("   |{}\n", format!("{:>w$}", "^", w = 2));
                     break;
                 }
             }

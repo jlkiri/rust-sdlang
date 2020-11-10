@@ -12,7 +12,7 @@ fn main() -> std::io::Result<()> {
 
     let source = std::fs::read_to_string(cwd)?;
 
-    let ref mut scanner = Scanner::new("1author \"Potato Croissant\"");
+    let ref mut scanner = Scanner::new("1author \"Potato Croissant\";");
 
     let parser = Parser::new(scanner);
     let tags = parser.parse();
