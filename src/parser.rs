@@ -36,9 +36,8 @@ pub struct Parser<'a> {
     scanner: &'a mut Scanner<'a>,
     previous: Option<Token>,
     current: Option<Token>,
-    panic_mode: bool,
-    current_tag: Option<Tag>,
     tags: Vec<Tag>,
+    current_tag: Tag
 }
 
 impl<'a> Parser<'a> {
@@ -49,10 +48,12 @@ impl<'a> Parser<'a> {
             scanner,
             previous,
             current,
-            panic_mode: false,
             tags: vec![],
-            current_tag: None,
         }
+    }
+
+    fn current_tag(&self) -> Option<&Tag> {
+        self.tags.last()
     }
 
     fn consume(&mut self, token: Token, msg: &'static str) -> Result<Option<Token>, &str> {
@@ -93,14 +94,69 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn tag_declaration(&mut self) -> Result<Tag, Error> {
-        match self.identifier() {
-            Ok(name) => {
-                let tag = Tag::new(name);
+    fn literal(&mut self) -> Result<Value, Error> {
+        unimplemented!()
+    }
+
+    fn attribute(&mut self) -> Result<(String, Value), Error> {
+        let name = self.identifier()?;
+
+        match self.current {
+            Some(Token::Equal(_, _, _)) => {
+                self.advance();
+            }
+            Some(ref t) => {
+                let (start, end, line) = t.position();
+                return Err(Error("Unexpected identifier.", start, end, line));
+            }
+            None => match self.previous {
+                Some(ref p) => {
+                    let (start, end, line) = p.position();
+                    return Err(Error("Unexpected identifier.", start, end, line));
+                }
+                _ => (),
+            },
+        }
+
+        let literal = self.literal();
+
+        match literal {
+            Ok(value) => Ok((name, value)),
+            Err(Error(_, s, e, l)) => Err(Error("Expect literal.", s, e, l)),
+        }
+    }
+    
+    fn attribute_or_literal(&mut self) -> Result<(), Error> {
+        let attr = self.attribute();
+        let current_tag = self.current_tag();
+
+        match attr {
+            Ok(attr) => {
+                tag.attributes.insert(attr.0, attr.1);
                 Ok(tag)
             }
-            Err(e) => Err(e),
+            Err(_) => {
+                let literal = self.literal();
+                match literal {
+                    Ok(value) => {
+                        tag.values.push(value);
+                        Ok(tag)
+                    }
+                    Err(Error(_, s, e, l)) => {
+                        return Err(Error("Expect at least 1 literal or attribute.", s, e, l))
+                    }
+                }
+            }
         }
+    }
+
+    fn tag_declaration(&mut self) -> Result<Tag, Error> {
+        let identifier = self.identifier()?;
+        let mut tag = Tag::new(identifier);
+
+        self.attribute_or_literal(&mut tag) {}
+
+        Ok(tag)
     }
 
     fn advance(&mut self) -> Option<Token> {
@@ -113,33 +169,37 @@ impl<'a> Parser<'a> {
         self.current.as_ref()
     }
 
+    fn print_error(&self, msg: &str, start: usize, end: usize, line: usize) {
+        let mut report = String::new();
+        let source_length = self.scanner.source_length();
+        let lines: Vec<_> = self
+            .scanner
+            .source_slice(end, source_length)
+            .split("\n")
+            .collect();
+        let rctx = lines.first().unwrap_or(&"");
+
+        report.push_str(format!("Syntax error at line {}: {}\n", line, msg).as_str());
+        report.push_str("   |\n");
+        report.push_str(
+            format!(
+                "{}  | {}{}\n",
+                line,
+                self.scanner.source_slice(start, end),
+                rctx
+            )
+            .as_str(),
+        );
+        print!("{}", report);
+        println!("   |{}\n", format!("{:>w$}", "^", w = 2));
+    }
+
     pub fn parse(mut self) -> Vec<Tag> {
         while self.current.is_some() {
             match self.tag_declaration() {
                 Ok(tag) => self.tags.push(tag),
                 Err(Error(msg, start, end, line)) => {
-                    let mut report = String::new();
-
-                    let before_newline: Vec<_> = self
-                        .scanner
-                        .source_slice(end, self.scanner.source_length())
-                        .split("\n")
-                        .collect();
-                    let rctx = before_newline.first().unwrap_or(&"");
-
-                    report.push_str(format!("Parse error at line {}: {}\n", line, msg).as_str());
-                    report.push_str("   |\n");
-                    report.push_str(
-                        format!(
-                            "{}  | {}{}\n",
-                            line,
-                            self.scanner.source_slice(start, end),
-                            rctx
-                        )
-                        .as_str(),
-                    );
-                    print!("{}", report);
-                    println!("   |{}\n", format!("{:>w$}", "^", w = 2));
+                    self.print_error(msg, start, end, line);
                     break;
                 }
             }
