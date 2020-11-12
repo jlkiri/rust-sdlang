@@ -1,5 +1,6 @@
 use crate::scanner::*;
 use std::collections::HashMap;
+use std::fmt;
 
 #[derive(Debug)]
 pub enum Value {
@@ -10,12 +11,34 @@ pub enum Value {
     Null,
 }
 
+impl fmt::Display for Value {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Value::String(v) => write!(f, "{}", v),
+            Value::Integer(v) => write!(f, "{}", v),
+            Value::Float(v) => write!(f, "{}", v),
+            Value::Null => write!(f, "null"),
+            Value::Boolean(b) => write!(f, "{}", b),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Tag {
     name: String,
     values: Vec<Value>,
     attributes: HashMap<String, Value>,
     children: Vec<Tag>,
+}
+
+impl fmt::Display for Tag {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}: ", self.name)?;
+        for value in self.values.iter() {
+            write!(f, "{} ", value)?;
+        }
+        write!(f, "\n")
+    }
 }
 
 impl Tag {

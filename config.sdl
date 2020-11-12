@@ -1,3 +1,7 @@
-author "Kirill Vasiltsov" "Ren Sakamoto" sorted=true;
-published false;
-years 2017 2018 2020;
+author "Kirill Vasiltsov";
+version "1.8.0";
+files "dist/" "lib/" "!lib/*.png";
+private false;
+peer-dependencies null;
+dev-dependencies "tsdx" "ts-morph" "fs-events" darwin=true;
+

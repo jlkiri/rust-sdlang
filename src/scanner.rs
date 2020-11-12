@@ -153,6 +153,17 @@ impl<'a> Scanner<'a> {
         (start, end, self.line)
     }
 
+    fn is_valid_char(&self, chr: Option<Char>) -> bool {
+        if let Some((_, ch)) = chr {
+            return ch.is_ascii_alphabetic()
+                || ch.is_digit(10)
+                || ch == '_'
+                || ch == '$'
+                || ch == '-';
+        }
+        false
+    }
+
     fn is_alpha(&self, chr: Option<Char>) -> bool {
         if let Some((_, ch)) = chr {
             return ch.is_ascii_alphabetic();
@@ -185,7 +196,7 @@ impl<'a> Scanner<'a> {
     }
 
     fn identifier(&mut self) -> Token {
-        while self.is_alpha(self.peek()) || self.is_digit(self.peek()) {
+        while self.is_valid_char(self.peek()) {
             self.advance();
         }
 
@@ -282,7 +293,7 @@ impl<'a> Scanner<'a> {
 
         match self.advance() {
             Some((_, ch)) => {
-                if ch.is_ascii_alphabetic() {
+                if ch.is_ascii_alphabetic() || ch == '_' {
                     return Some(self.identifier());
                 }
 

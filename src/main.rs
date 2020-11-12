@@ -19,7 +19,9 @@ fn main() -> std::io::Result<()> {
     let parser = Parser::new(scanner);
     let tags = parser.parse();
 
-    println!("{:?}", tags);
+    for tag in tags {
+        println!("{}", tag);
+    }
 
     Ok(())
 }
