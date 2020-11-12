@@ -1,2 +1,3 @@
-author "Kirill Vasiltsov";
-year 2020;
+author "Kirill Vasiltsov" "Ren Sakamoto" sorted=true;
+published false;
+years 2017 2018 2020;

@@ -37,7 +37,6 @@ pub struct Parser<'a> {
     previous: Option<Token>,
     current: Option<Token>,
     tags: Vec<Tag>,
-    current_tag: Tag
 }
 
 impl<'a> Parser<'a> {
@@ -95,7 +94,43 @@ impl<'a> Parser<'a> {
     }
 
     fn literal(&mut self) -> Result<Value, Error> {
-        unimplemented!()
+        match self.current {
+            Some(Token::Integer(s, e, _)) => {
+                self.advance();
+                let int = str::parse::<i32>(self.scanner.source_slice(s, e)).unwrap();
+                Ok(Value::Integer(int))
+            }
+            Some(Token::String(s, e, _)) => {
+                self.advance();
+                let string = self.scanner.source_slice(s, e);
+                Ok(Value::String(String::from(string)))
+            }
+            Some(Token::Float64(s, e, _)) => {
+                self.advance();
+                let float = str::parse::<f64>(self.scanner.source_slice(s, e)).unwrap();
+                Ok(Value::Float(float))
+            }
+            Some(Token::True(_, _, _)) => {
+                self.advance();
+                Ok(Value::Boolean(true))
+            }
+            Some(Token::False(_, _, _)) => {
+                self.advance();
+                Ok(Value::Boolean(false))
+            }
+            Some(Token::Null(_, _, _)) => {
+                self.advance();
+                Ok(Value::Null)
+            }
+            Some(Token::Error(msg, s, e, l)) => Err(Error(msg, s, e, l)),
+            None | Some(_) => match self.previous {
+                Some(ref p) => {
+                    let (start, end, line) = p.position();
+                    Err(Error("Expect literal.", start, end, line))
+                }
+                _ => Err(Error("Expect literal.", 0, 0, 0)),
+            },
+        }
     }
 
     fn attribute(&mut self) -> Result<(String, Value), Error> {
@@ -125,23 +160,16 @@ impl<'a> Parser<'a> {
             Err(Error(_, s, e, l)) => Err(Error("Expect literal.", s, e, l)),
         }
     }
-    
-    fn attribute_or_literal(&mut self) -> Result<(), Error> {
+
+    fn attribute_or_literal(&mut self) -> Result<(String, Value), Error> {
         let attr = self.attribute();
-        let current_tag = self.current_tag();
 
         match attr {
-            Ok(attr) => {
-                tag.attributes.insert(attr.0, attr.1);
-                Ok(tag)
-            }
+            Ok(attr) => Ok(attr),
             Err(_) => {
                 let literal = self.literal();
                 match literal {
-                    Ok(value) => {
-                        tag.values.push(value);
-                        Ok(tag)
-                    }
+                    Ok(value) => Ok((String::from(""), value)),
                     Err(Error(_, s, e, l)) => {
                         return Err(Error("Expect at least 1 literal or attribute.", s, e, l))
                     }
@@ -154,7 +182,23 @@ impl<'a> Parser<'a> {
         let identifier = self.identifier()?;
         let mut tag = Tag::new(identifier);
 
-        self.attribute_or_literal(&mut tag) {}
+        while let Some(ref token) = self.current {
+            match token {
+                Token::Semicolon(_, _, _) => {
+                    self.advance();
+                    return Ok(tag);
+                }
+                _ => match self.attribute_or_literal() {
+                    Ok((name, value)) if name.is_empty() => {
+                        tag.values.push(value);
+                    }
+                    Ok((name, value)) => {
+                        tag.attributes.insert(name, value);
+                    }
+                    Err(e) => return Err(e),
+                },
+            }
+        }
 
         Ok(tag)
     }
