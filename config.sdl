@@ -1,7 +1,8 @@
 author "Kirill Vasiltsov";
-version "1.8.0";
+version "1.8.0" freeze=true;
 files "dist/" "lib/" "!lib/*.png";
 private false;
+node_versions 10 11 12 13 14 15;
 peer-dependencies null;
 dev-dependencies "tsdx" "ts-morph" "fs-events" darwin=true;
 

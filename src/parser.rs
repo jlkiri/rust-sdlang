@@ -33,9 +33,14 @@ pub struct Tag {
 
 impl fmt::Display for Tag {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}: ", self.name)?;
+        write!(f, "Tag: {}", self.name)?;
+        write!(f, "\nValues: ")?;
         for value in self.values.iter() {
             write!(f, "{} ", value)?;
+        }
+        write!(f, "\nAttributes: ")?;
+        for attribute in self.attributes.iter() {
+            write!(f, "{}={}", attribute.0, attribute.1)?;
         }
         write!(f, "\n")
     }
