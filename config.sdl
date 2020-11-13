@@ -1,4 +1,4 @@
-author "Kirill Vasiltsov";
+author "Kirill";
 name "react-easy-flip";
 version "4.0.3";
 description "A lightweight React library for smooth FLIP animations";

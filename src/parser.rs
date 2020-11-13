@@ -83,24 +83,10 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn current_tag(&self) -> Option<&Tag> {
-        self.tags.last()
-    }
-
     fn consume(&mut self, token: Token, msg: &'static str) -> Result<Option<Token>, &str> {
         match &self.current {
             Some(t) if *t == token => Ok(self.advance()),
             _ => Err(msg),
-        }
-    }
-
-    fn match_token(&mut self, token: Token) -> bool {
-        match &self.current {
-            Some(t) if *t == token => {
-                self.advance();
-                true
-            }
-            _ => false,
         }
     }
 
@@ -215,9 +201,7 @@ impl<'a> Parser<'a> {
 
                 loop {
                     match self.current {
-                        Some(Token::Semicolon(_, _, _))
-                        | Some(Token::LeftBrace(_, _, _))
-                        | None => break,
+                        Some(Token::Semicolon(_, _, _)) | Some(Token::LeftBrace(_, _, _)) => break,
                         Some(_) => {
                             let attr_or_literal = self.attribute_or_literal()?;
 
@@ -235,11 +219,16 @@ impl<'a> Parser<'a> {
                                 }
                             }
                         }
+                        None => return Err(self.none_error("Expect literal value or attribute.")),
                     }
                 }
 
                 match self.current {
                     Some(Token::Semicolon(_, _, _)) => {
+                        if tag.values.len() == 0 && tag.attributes.len() == 0 {
+                            return Err(self.none_error("Expect literal value or attribute."));
+                        }
+
                         self.advance();
                         Ok(tag)
                     }
@@ -272,10 +261,6 @@ impl<'a> Parser<'a> {
         let previous = self.current.take();
         self.current = self.scanner.next();
         previous
-    }
-
-    fn peek(&self) -> Option<&Token> {
-        self.current.as_ref()
     }
 
     fn print_error(&self, msg: &str, start: usize, end: usize, line: usize) {
