@@ -68,7 +68,6 @@ pub struct Parser<'a> {
     scanner: &'a mut Scanner<'a>,
     previous: Option<Token>,
     current: Option<Token>,
-    current_tag: Tag,
     tags: Vec<Tag>,
 }
 
@@ -76,12 +75,10 @@ impl<'a> Parser<'a> {
     pub fn new(scanner: &'a mut Scanner<'a>) -> Self {
         let previous = None;
         let current = scanner.next();
-        let current_tag = Tag::new(String::from("parent"));
         Parser {
             scanner,
             previous,
             current,
-            current_tag,
             tags: vec![],
         }
     }
@@ -114,14 +111,8 @@ impl<'a> Parser<'a> {
                 Ok(Some(String::from(self.scanner.source_slice(s, e))))
             }
             Some(Token::Error(msg, s, e, l)) => Err(Error(msg, s, e, l)),
-            Some(ref t) => Ok(None),
-            None => Ok(None), /* match self.previous {
-                                  Some(ref p) => {
-                                      let (start, end, line) = p.position();
-                                      Err(Error("Expect identifier.", start, end, line))
-                                  }
-                                  _ => Err(Error("Expect identifier.", 0, 0, 0)),
-                              } */
+            Some(_) => Ok(None),
+            None => Ok(None),
         }
     }
 
@@ -205,29 +196,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /* fn attributes(&mut self) -> Result<Vec<, Error> {
-        while let Some(ref token) = self.current {
-            match token {
-                Token::Semicolon(_, _, _) => {
-                    self.advance();
-                    return Ok(tag);
-                }
-                _ => match self.attribute_or_literal() {
-                    Ok((name, value)) if name.is_empty() => {
-                        tag.values.push(value);
-                    }
-                    Ok((name, value)) => {
-                        tag.attributes.insert(name, value);
-                    }
-                    Err(e) => return Err(e),
-                },
-            }
-        }
-
-        Ok(tag)
-    } */
-
-    fn raise_error(&self, msg: &'static str) -> Error {
+    fn none_error(&self, msg: &'static str) -> Error {
         match self.previous {
             Some(ref p) => {
                 let (start, end, line) = p.position();
@@ -237,54 +206,66 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn tag_declaration(&mut self) -> Result<(), Error> {
+    fn tag_declaration(&mut self) -> Result<Tag, Error> {
         let identifier = self.identifier()?;
 
         match identifier {
-            Some(name) => {}
-            None => return Err(self.raise_error("Expect identifier.")),
-        }
+            Some(name) => {
+                let mut tag = Tag::new(name);
 
-        /* while let Some(ref token) = self.current {
-            match token {
-                Token::LeftBrace(_, _, _) => {
-                    println!("LEFT BRACE");
-                    self.advance();
-
-                    while let Some(ref token) = self.current {
-                        match token {
-                            Token::RightBrace(_, _, _) => {
-                                break;
-                            }
-                            Token::Error(msg, s, e, l) => {
-                                return Err(Error(msg, *s, *e, *l));
-                            }
-                            _ => (),
-                        }
-                    }
-                    println!("WHAT");
-
+                loop {
                     match self.current {
-                        Some(Token::RightBrace(_, _, _)) => {
-                            println!("CONSUME RIGHT BRACE");
-                            self.advance();
-                        }
-                        Some(_) | None => match self.previous {
-                            Some(ref p) => {
-                                let (start, end, line) = p.position();
-                                return Err(Error("Expect } after tag body.", start, end, line));
+                        Some(Token::Semicolon(_, _, _))
+                        | Some(Token::LeftBrace(_, _, _))
+                        | None => break,
+                        Some(_) => {
+                            let attr_or_literal = self.attribute_or_literal()?;
+
+                            match attr_or_literal {
+                                Some((Some(name), value)) => {
+                                    tag.attributes.insert(name, value);
+                                }
+                                Some((None, value)) => {
+                                    tag.values.push(value);
+                                }
+                                None => {
+                                    return Err(
+                                        self.none_error("Expect literal value or attribute.")
+                                    )
+                                }
                             }
-                            _ => return Err(Error("Expect } after tag body.", 0, 0, 0)),
-                        },
+                        }
                     }
                 }
-                _ => {
-                    self.tag(&mut tag);
+
+                match self.current {
+                    Some(Token::Semicolon(_, _, _)) => {
+                        self.advance();
+                        Ok(tag)
+                    }
+                    Some(Token::LeftBrace(_, _, _)) => {
+                        self.advance();
+                        loop {
+                            match self.current {
+                                Some(Token::RightBrace(_, _, _)) => {
+                                    self.advance();
+                                    break;
+                                }
+                                Some(_) => {
+                                    let child_tag = self.tag_declaration()?;
+                                    tag.children.push(child_tag);
+                                }
+                                None => return Err(self.none_error("Expect '}' after tag body.")),
+                            }
+                        }
+
+                        Ok(tag)
+                    }
+                    Some(_) | None => Err(self.none_error("Expect ';' or '{'.")),
                 }
             }
-        } */
-
-        Ok(tag)
+            None => Err(self.none_error("Expect identifier.")),
+        }
     }
 
     fn advance(&mut self) -> Option<Token> {
