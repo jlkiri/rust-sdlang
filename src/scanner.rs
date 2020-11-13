@@ -64,7 +64,7 @@ impl<'a> Scanner<'a> {
             source,
             start: first_char,
             current: first_char,
-            line: 0,
+            line: 1,
             scanner,
         }
     }
@@ -158,15 +158,9 @@ impl<'a> Scanner<'a> {
             return ch.is_ascii_alphabetic()
                 || ch.is_digit(10)
                 || ch == '_'
+                || ch == ':'
                 || ch == '$'
                 || ch == '-';
-        }
-        false
-    }
-
-    fn is_alpha(&self, chr: Option<Char>) -> bool {
-        if let Some((_, ch)) = chr {
-            return ch.is_ascii_alphabetic();
         }
         false
     }

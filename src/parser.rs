@@ -42,6 +42,10 @@ impl fmt::Display for Tag {
         for attribute in self.attributes.iter() {
             write!(f, "{}={}", attribute.0, attribute.1)?;
         }
+        write!(f, "\nChildren: ")?;
+        for child in self.children.iter() {
+            write!(f, "{}", child)?;
+        }
         write!(f, "\n")
     }
 }
@@ -64,6 +68,7 @@ pub struct Parser<'a> {
     scanner: &'a mut Scanner<'a>,
     previous: Option<Token>,
     current: Option<Token>,
+    current_tag: Tag,
     tags: Vec<Tag>,
 }
 
@@ -71,10 +76,12 @@ impl<'a> Parser<'a> {
     pub fn new(scanner: &'a mut Scanner<'a>) -> Self {
         let previous = None;
         let current = scanner.next();
+        let current_tag = Tag::new(String::from("parent"));
         Parser {
             scanner,
             previous,
             current,
+            current_tag,
             tags: vec![],
         }
     }
@@ -100,116 +107,105 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn identifier(&mut self) -> Result<String, Error> {
+    fn identifier(&mut self) -> Result<Option<String>, Error> {
         match self.current {
             Some(Token::Identifier(s, e, _)) => {
                 self.advance();
-                Ok(String::from(self.scanner.source_slice(s, e)))
+                Ok(Some(String::from(self.scanner.source_slice(s, e))))
             }
             Some(Token::Error(msg, s, e, l)) => Err(Error(msg, s, e, l)),
-            Some(ref t) => {
-                let (start, end, line) = t.position();
-                Err(Error("Invalid identifier.", start, end, line))
-            }
-            None => match self.previous {
-                Some(ref p) => {
-                    let (start, end, line) = p.position();
-                    Err(Error("Expect identifier.", start, end, line))
-                }
-                _ => Err(Error("Expect identifier.", 0, 0, 0)),
-            },
+            Some(ref t) => Ok(None),
+            None => Ok(None), /* match self.previous {
+                                  Some(ref p) => {
+                                      let (start, end, line) = p.position();
+                                      Err(Error("Expect identifier.", start, end, line))
+                                  }
+                                  _ => Err(Error("Expect identifier.", 0, 0, 0)),
+                              } */
         }
     }
 
-    fn literal(&mut self) -> Result<Value, Error> {
+    fn literal(&mut self) -> Result<Option<Value>, Error> {
         match self.current {
             Some(Token::Integer(s, e, _)) => {
                 self.advance();
                 let int = str::parse::<i32>(self.scanner.source_slice(s, e)).unwrap();
-                Ok(Value::Integer(int))
+                Ok(Some(Value::Integer(int)))
             }
             Some(Token::String(s, e, _)) => {
                 self.advance();
                 let string = self.scanner.source_slice(s, e);
-                Ok(Value::String(String::from(string)))
+                Ok(Some(Value::String(String::from(string))))
             }
             Some(Token::Float64(s, e, _)) => {
                 self.advance();
                 let float = str::parse::<f64>(self.scanner.source_slice(s, e)).unwrap();
-                Ok(Value::Float(float))
+                Ok(Some(Value::Float(float)))
             }
             Some(Token::True(_, _, _)) => {
                 self.advance();
-                Ok(Value::Boolean(true))
+                Ok(Some(Value::Boolean(true)))
             }
             Some(Token::False(_, _, _)) => {
                 self.advance();
-                Ok(Value::Boolean(false))
+                Ok(Some(Value::Boolean(false)))
             }
             Some(Token::Null(_, _, _)) => {
                 self.advance();
-                Ok(Value::Null)
+                Ok(Some(Value::Null))
             }
             Some(Token::Error(msg, s, e, l)) => Err(Error(msg, s, e, l)),
-            None | Some(_) => match self.previous {
-                Some(ref p) => {
-                    let (start, end, line) = p.position();
-                    Err(Error("Expect literal.", start, end, line))
-                }
-                _ => Err(Error("Expect literal.", 0, 0, 0)),
-            },
+            None | Some(_) => Ok(None),
         }
     }
 
-    fn attribute(&mut self) -> Result<(String, Value), Error> {
+    fn attribute(&mut self) -> Result<Option<(String, Value)>, Error> {
         let name = self.identifier()?;
 
-        match self.current {
-            Some(Token::Equal(_, _, _)) => {
-                self.advance();
-            }
-            Some(ref t) => {
-                let (start, end, line) = t.position();
-                return Err(Error("Unexpected identifier.", start, end, line));
-            }
-            None => match self.previous {
-                Some(ref p) => {
-                    let (start, end, line) = p.position();
-                    return Err(Error("Unexpected identifier.", start, end, line));
-                }
-                _ => (),
-            },
-        }
+        match name {
+            Some(n) => match self.current {
+                Some(Token::Equal(s, e, l)) => {
+                    self.advance();
 
-        let literal = self.literal();
+                    let literal = self.literal()?;
 
-        match literal {
-            Ok(value) => Ok((name, value)),
-            Err(Error(_, s, e, l)) => Err(Error("Expect literal.", s, e, l)),
-        }
-    }
-
-    fn attribute_or_literal(&mut self) -> Result<(String, Value), Error> {
-        let attr = self.attribute();
-
-        match attr {
-            Ok(attr) => Ok(attr),
-            Err(_) => {
-                let literal = self.literal();
-                match literal {
-                    Ok(value) => Ok((String::from(""), value)),
-                    Err(Error(_, s, e, l)) => {
-                        return Err(Error("Expect at least 1 literal or attribute.", s, e, l))
+                    match literal {
+                        Some(value) => Ok(Some((n, value))),
+                        None => Err(Error("Expect literal after '='.", s, e, l)),
                     }
                 }
+                Some(ref t) => {
+                    let (start, end, line) = t.position();
+                    return Err(Error("Expect '=' after attribute name.", start, end, line));
+                }
+                None => match self.previous {
+                    Some(ref p) => {
+                        let (start, end, line) = p.position();
+                        return Err(Error("Unexpected identifier.", start + 1, end + 1, line));
+                    }
+                    _ => Err(Error("Unexpected identifier.", 0, 0, 1)),
+                },
+            },
+            None => Ok(None),
+        }
+    }
+
+    fn attribute_or_literal(&mut self) -> Result<Option<(Option<String>, Value)>, Error> {
+        let attribute = self.attribute()?;
+
+        match attribute {
+            Some(attr) => Ok(Some((Some(attr.0), attr.1))),
+            None => {
+                let literal = self.literal()?;
+                match literal {
+                    Some(value) => Ok(Some((None, value))),
+                    None => Ok(None),
+                }
             }
         }
     }
 
-    fn tag_declaration(&mut self) -> Result<Tag, Error> {
-        let identifier = self.identifier()?;
-        let mut tag = Tag::new(identifier);
-
+    /* fn attributes(&mut self) -> Result<Vec<, Error> {
         while let Some(ref token) = self.current {
             match token {
                 Token::Semicolon(_, _, _) => {
@@ -227,6 +223,66 @@ impl<'a> Parser<'a> {
                 },
             }
         }
+
+        Ok(tag)
+    } */
+
+    fn raise_error(&self, msg: &'static str) -> Error {
+        match self.previous {
+            Some(ref p) => {
+                let (start, end, line) = p.position();
+                Error(msg, start + 1, end + 1, line)
+            }
+            _ => Error(msg, 0, 0, 1),
+        }
+    }
+
+    fn tag_declaration(&mut self) -> Result<(), Error> {
+        let identifier = self.identifier()?;
+
+        match identifier {
+            Some(name) => {}
+            None => return Err(self.raise_error("Expect identifier.")),
+        }
+
+        /* while let Some(ref token) = self.current {
+            match token {
+                Token::LeftBrace(_, _, _) => {
+                    println!("LEFT BRACE");
+                    self.advance();
+
+                    while let Some(ref token) = self.current {
+                        match token {
+                            Token::RightBrace(_, _, _) => {
+                                break;
+                            }
+                            Token::Error(msg, s, e, l) => {
+                                return Err(Error(msg, *s, *e, *l));
+                            }
+                            _ => (),
+                        }
+                    }
+                    println!("WHAT");
+
+                    match self.current {
+                        Some(Token::RightBrace(_, _, _)) => {
+                            println!("CONSUME RIGHT BRACE");
+                            self.advance();
+                        }
+                        Some(_) | None => match self.previous {
+                            Some(ref p) => {
+                                let (start, end, line) = p.position();
+                                return Err(Error("Expect } after tag body.", start, end, line));
+                            }
+                            _ => return Err(Error("Expect } after tag body.", 0, 0, 0)),
+                        },
+                    }
+                }
+                _ => {
+                    self.tag(&mut tag);
+                }
+            }
+        } */
 
         Ok(tag)
     }

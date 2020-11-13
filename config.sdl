@@ -1,8 +1,30 @@
 author "Kirill Vasiltsov";
-version "1.8.0" freeze=true;
-files "dist/" "lib/" "!lib/*.png";
-private false;
-node_versions 10 11 12 13 14 15;
-peer-dependencies null;
-dev-dependencies "tsdx" "ts-morph" "fs-events" darwin=true;
+name "react-easy-flip";
+version "4.0.3";
+description "A lightweight React library for smooth FLIP animations";
+license "MIT";
+
+scripts {
+  build "microbundle -f es,cjs --jsx React.createElement --no-sourcemap";
+  build:dev "microbundle -f es,cjs --jsx React.createElement";
+  prepare "yarn build";
+  format "prettier --write src/**/*.{ts,tsx,js,jsx}";
+  lint "eslint src/ --ext .js,.ts,.tsx,.jsx";
+  lint:fix "eslint --fix src/ --ext .js,.ts,.tsx,.jsx";
+  develop "yarn start";
+}
+
+repository {
+  url "git+ssh://git@github.com/jlkiri/react-easy-flip.git";
+}
+
+peer-dependencies {
+  react ">= 16.8.0";
+  react-dom ">= 16.8.0";
+}
+
+dev-dependencies {
+  react "^16.13.1";
+  react-dom "^16.13.1";
+}
 
