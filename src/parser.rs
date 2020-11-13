@@ -33,20 +33,37 @@ pub struct Tag {
 
 impl fmt::Display for Tag {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Tag: {}", self.name)?;
-        write!(f, "\nValues: ")?;
-        for value in self.values.iter() {
-            write!(f, "{} ", value)?;
+        let mut indent = 2;
+        write!(f, "Tag {} {{", self.name)?;
+        write!(f, "\n{:>w$}values: ", "", w = indent)?;
+
+        // f.debug_list().entries(&self.values).finish()?;
+
+        for (i, value) in self.values.iter().enumerate() {
+            if i == self.values.len() - 1 {
+                write!(f, "{}", value)?;
+            } else {
+                write!(f, "{}, ", value)?;
+            }
         }
-        write!(f, "\nAttributes: ")?;
-        for attribute in self.attributes.iter() {
-            write!(f, "{}={}", attribute.0, attribute.1)?;
+
+        if self.attributes.len() > 0 {
+            write!(f, "\n{:>w$}attributes: ", "", w = indent)?;
+            for attribute in self.attributes.iter() {
+                write!(f, "{}={}", attribute.0, attribute.1)?;
+            }
         }
-        write!(f, "\nChildren: ")?;
-        for child in self.children.iter() {
-            write!(f, "{}", child)?;
+
+        if self.children.len() > 0 {
+            write!(f, "\n{:>w$}children:\n", "", w = indent)?;
+            indent *= 2;
+
+            for child in self.children.iter() {
+                write!(f, "{:>w$}{}", child, "", w = indent)?;
+            }
         }
-        write!(f, "\n")
+
+        write!(f, "\n}}\n")
     }
 }
 

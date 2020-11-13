@@ -5,10 +5,14 @@ description "A lightweight React library for smooth FLIP animations";
 license "MIT";
 
 scripts {
-  build "microbundle -f es,cjs --jsx React.createElement --no-sourcemap";
-  build:dev "microbundle -f es,cjs --jsx React.createElement";
+
+  build {
+    prod "microbundle -f es,cjs --jsx React.createElement --no-sourcemap";
+    dev "microbundle -f es,cjs --jsx React.createElement";
+  }
+  
+  format prettier=true "prettier --write src/**/*.{ts,tsx,js,jsx}";
   prepare "yarn build";
-  format "prettier --write src/**/*.{ts,tsx,js,jsx}";
   lint "eslint src/ --ext .js,.ts,.tsx,.jsx";
   lint:fix "eslint --fix src/ --ext .js,.ts,.tsx,.jsx";
   develop "yarn start";
