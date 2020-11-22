@@ -19,6 +19,7 @@ pub enum Token {
     Identifier(usize, usize, Line),
     Float64(usize, usize, Line),
     Integer(usize, usize, Line),
+    Eof,
 }
 
 impl Token {
@@ -36,6 +37,7 @@ impl Token {
             | Token::Float64(s, e, l)
             | Token::Integer(s, e, l)
             | Token::Error(_, s, e, l) => (*s, *e, *l),
+            Token::Eof => (0, 0, 0),
         }
     }
 }
@@ -79,16 +81,16 @@ impl<'a> Scanner<'a> {
         current
     }
 
-    fn peek(&self) -> Option<Char> {
-        self.current
+    fn peek(&self) -> Option<char> {
+        self.current.map(|c| c.1)
     }
 
-    fn peek_next(&mut self) -> Option<&Char> {
-        self.scanner.peek()
+    fn peek_next(&mut self) -> Option<char> {
+        self.scanner.peek().map(|c| c.1)
     }
 
     fn skip_whitespace(&mut self) {
-        while let Some((_, ch)) = self.peek() {
+        while let Some(ch) = self.peek() {
             match ch {
                 ' ' | '\t' | '\r' => {
                     self.advance();
@@ -98,12 +100,12 @@ impl<'a> Scanner<'a> {
                     self.advance();
                 }
                 '/' => match self.peek_next() {
-                    Some((_, ch)) => {
-                        if ch == &'/' {
+                    Some(ch) => {
+                        if ch == '/' {
                             self.advance();
                             loop {
                                 match self.peek() {
-                                    Some((_, ch)) if ch != ';' && ch != '\n' => {
+                                    Some(ch) if ch != ';' && ch != '\n' => {
                                         self.advance();
                                     }
                                     _ => break,
@@ -117,18 +119,18 @@ impl<'a> Scanner<'a> {
                 },
                 '#' => loop {
                     match self.peek() {
-                        Some((_, ch)) if ch != ';' && ch != '\n' => {
+                        Some(ch) if ch != ';' && ch != '\n' => {
                             self.advance();
                         }
                         _ => break,
                     }
                 },
                 '-' => match self.peek_next() {
-                    Some((_, ch)) => {
-                        if ch == &'-' {
+                    Some(ch) => {
+                        if ch == '-' {
                             loop {
                                 match self.peek() {
-                                    Some((_, ch)) if ch != ';' && ch != '\n' => {
+                                    Some(ch) if ch != ';' && ch != '\n' => {
                                         self.advance();
                                     }
                                     _ => break,
@@ -153,8 +155,8 @@ impl<'a> Scanner<'a> {
         (start, end, self.line)
     }
 
-    fn is_valid_char(&self, chr: Option<Char>) -> bool {
-        if let Some((_, ch)) = chr {
+    fn is_valid_char(&self, chr: Option<char>) -> bool {
+        if let Some(ch) = chr {
             return ch.is_ascii_alphabetic()
                 || ch.is_digit(10)
                 || ch == '_'
@@ -165,8 +167,8 @@ impl<'a> Scanner<'a> {
         false
     }
 
-    fn is_digit(&self, chr: Option<Char>) -> bool {
-        if let Some((_, ch)) = chr {
+    fn is_digit(&self, chr: Option<char>) -> bool {
+        if let Some(ch) = chr {
             return ch.is_digit(10);
         }
         false
@@ -205,18 +207,18 @@ impl<'a> Scanner<'a> {
     fn float(&mut self) -> Token {
         self.advance();
 
-        match self.peek().map(|(_, c)| c) {
+        match self.peek() {
             Some(ch) if !ch.is_digit(10) => self.make_error("'.' must be followed by digit."),
             Some(_) => {
                 while self.is_digit(self.peek()) {
                     self.advance();
                 }
 
-                if let Some((_, ch)) = self.peek() {
+                if let Some(ch) = self.peek() {
                     if ch == 'e' || ch == 'E' {
                         self.advance();
 
-                        if let Some((_, ch)) = self.peek() {
+                        if let Some(ch) = self.peek() {
                             if ch == '+' || ch == '-' {
                                 self.advance();
 
@@ -250,7 +252,7 @@ impl<'a> Scanner<'a> {
         let (start, end, line) = self.range();
 
         match self.peek() {
-            Some((_, '.')) => self.float(),
+            Some('.') => self.float(),
             _ => Token::Integer(start, end, line),
         }
     }
@@ -258,7 +260,7 @@ impl<'a> Scanner<'a> {
     fn string(&mut self) -> Token {
         loop {
             match self.peek() {
-                Some((_, ch)) if ch != '"' => {
+                Some(ch) if ch != '"' => {
                     self.advance();
                 }
                 _ => break,
@@ -335,7 +337,7 @@ mod tests {
 
     #[test]
     fn scan_integers() {
-        test!("1", vec![Token::Integer(0, 1, 0)]);
+        test!("1", vec![Token::Integer(0, 1, 1)]);
     }
 
     #[test]
@@ -343,10 +345,10 @@ mod tests {
         test!(
             "1.2 3.4 5.6e1 7.8e+12",
             vec![
-                Token::Float64(0, 3, 0),
-                Token::Float64(4, 7, 0),
-                Token::Float64(8, 13, 0),
-                Token::Float64(14, 21, 0),
+                Token::Float64(0, 3, 1),
+                Token::Float64(4, 7, 1),
+                Token::Float64(8, 13, 1),
+                Token::Float64(14, 21, 1),
             ]
         );
     }
@@ -355,7 +357,7 @@ mod tests {
     fn scan_64_float_error() {
         test!(
             "1.",
-            vec![Token::Error("'.' must be followed by digit.", 0, 2, 0)]
+            vec![Token::Error("'.' must be followed by digit.", 0, 2, 1)]
         );
     }
 
@@ -364,20 +366,20 @@ mod tests {
         test!(
             "5.a",
             vec![
-                Token::Error("'.' must be followed by digit.", 0, 2, 0),
-                Token::Identifier(2, 3, 0),
+                Token::Error("'.' must be followed by digit.", 0, 2, 1),
+                Token::Identifier(2, 3, 1),
             ]
         );
     }
 
     #[test]
     fn scan_string() {
-        test!(r#""hello""#, vec![Token::String(1, 6, 0)]);
+        test!(r#""hello""#, vec![Token::String(1, 6, 1)]);
     }
 
     #[test]
     fn scan_identifier() {
-        test!("author", vec![Token::Identifier(0, 6, 0)]);
+        test!("author", vec![Token::Identifier(0, 6, 1)]);
     }
 
     #[test]
@@ -388,10 +390,10 @@ age;
         test!(
             source,
             vec![
-                Token::Identifier(0, 6, 0),
-                Token::Semicolon(24, 25, 0),
-                Token::Identifier(26, 29, 1),
-                Token::Semicolon(29, 30, 1),
+                Token::Identifier(0, 6, 1),
+                Token::Semicolon(24, 25, 1),
+                Token::Identifier(26, 29, 2),
+                Token::Semicolon(29, 30, 2),
             ]
         );
     }
@@ -404,9 +406,9 @@ age;
         test!(
             source,
             vec![
-                Token::Identifier(0, 1, 0),
-                Token::Identifier(4, 7, 1),
-                Token::Semicolon(7, 8, 1),
+                Token::Identifier(0, 1, 1),
+                Token::Identifier(4, 7, 2),
+                Token::Semicolon(7, 8, 2),
             ]
         );
     }
@@ -419,10 +421,10 @@ age;
         test!(
             source,
             vec![
-                Token::Identifier(0, 6, 0),
-                Token::Semicolon(23, 24, 0),
-                Token::Identifier(25, 28, 1),
-                Token::Semicolon(28, 29, 1),
+                Token::Identifier(0, 6, 1),
+                Token::Semicolon(23, 24, 1),
+                Token::Identifier(25, 28, 2),
+                Token::Semicolon(28, 29, 2),
             ]
         );
     }
@@ -435,10 +437,10 @@ age;
         test!(
             source,
             vec![
-                Token::Identifier(0, 6, 0),
-                Token::Semicolon(24, 25, 0),
-                Token::Identifier(26, 29, 1),
-                Token::Semicolon(29, 30, 1),
+                Token::Identifier(0, 6, 1),
+                Token::Semicolon(24, 25, 1),
+                Token::Identifier(26, 29, 2),
+                Token::Semicolon(29, 30, 2),
             ]
         );
     }
@@ -448,9 +450,9 @@ age;
         test!(
             "private=true",
             vec![
-                Token::Identifier(0, 7, 0),
-                Token::Equal(7, 8, 0),
-                Token::True(8, 12, 0)
+                Token::Identifier(0, 7, 1),
+                Token::Equal(7, 8, 1),
+                Token::True(8, 12, 1)
             ]
         );
     }
@@ -460,9 +462,9 @@ age;
         test!(
             r#"platform="darwin""#,
             vec![
-                Token::Identifier(0, 8, 0),
-                Token::Equal(8, 9, 0),
-                Token::String(10, 16, 0)
+                Token::Identifier(0, 8, 1),
+                Token::Equal(8, 9, 1),
+                Token::String(10, 16, 1)
             ]
         );
     }
@@ -472,9 +474,9 @@ age;
         test!(
             "true false null",
             vec![
-                Token::True(0, 4, 0),
-                Token::False(5, 10, 0),
-                Token::Null(11, 15, 0)
+                Token::True(0, 4, 1),
+                Token::False(5, 10, 1),
+                Token::Null(11, 15, 1)
             ]
         );
     }
@@ -484,8 +486,8 @@ age;
         test!(
             "/a",
             vec![
-                Token::Error("Unexpected character.", 0, 1, 0),
-                Token::Identifier(1, 2, 0),
+                Token::Error("Unexpected character.", 0, 1, 1),
+                Token::Identifier(1, 2, 1),
             ]
         );
     }
@@ -495,9 +497,9 @@ age;
         test!(
             "a ; b",
             vec![
-                Token::Identifier(0, 1, 0),
-                Token::Semicolon(2, 3, 0),
-                Token::Identifier(4, 5, 0),
+                Token::Identifier(0, 1, 1),
+                Token::Semicolon(2, 3, 1),
+                Token::Identifier(4, 5, 1),
             ]
         );
     }
@@ -507,9 +509,9 @@ age;
         test!(
             r#"author "Kirill Vasiltsov";"#,
             vec![
-                Token::Identifier(0, 6, 0),
-                Token::String(8, 24, 0),
-                Token::Semicolon(25, 26, 0),
+                Token::Identifier(0, 6, 1),
+                Token::String(8, 24, 1),
+                Token::Semicolon(25, 26, 1),
             ]
         );
     }
