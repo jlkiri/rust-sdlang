@@ -1,4 +1,5 @@
 use crate::scanner::*;
+use std::cmp;
 use std::collections::HashMap;
 use std::fmt;
 
@@ -83,15 +84,15 @@ struct Error(&'static str, usize, usize, usize);
 
 pub struct Parser<'a> {
     scanner: &'a mut Scanner<'a>,
-    previous: Option<Token>,
-    current: Option<Token>,
+    previous: Token,
+    current: Token,
     tags: Vec<Tag>,
 }
 
 impl<'a> Parser<'a> {
     pub fn new(scanner: &'a mut Scanner<'a>) -> Self {
-        let previous = None;
-        let current = scanner.next();
+        let previous = Token::Eof(0, 0, 1);
+        let current = scanner.next().unwrap_or(Token::Eof(0, 1, 1));
         Parser {
             scanner,
             previous,
@@ -100,56 +101,55 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn consume(&mut self, token: Token, msg: &'static str) -> Result<Option<Token>, &str> {
-        match &self.current {
-            Some(t) if *t == token => Ok(self.advance()),
+    /* fn consume(&mut self, token: Token, msg: &'static str) -> Result<Option<Token>, &str> {
+        match self.current {
+            t if t == token => Ok(self.advance()),
             _ => Err(msg),
         }
-    }
+    } */
 
     fn identifier(&mut self) -> Result<Option<String>, Error> {
         match self.current {
-            Some(Token::Identifier(s, e, _)) => {
+            Token::Identifier(s, e, _) => {
                 self.advance();
                 Ok(Some(String::from(self.scanner.source_slice(s, e))))
             }
-            Some(Token::Error(msg, s, e, l)) => Err(Error(msg, s, e, l)),
-            Some(_) => Ok(None),
-            None => Ok(None),
+            Token::Error(msg, s, e, l) => Err(Error(msg, s, e, l)),
+            _ => Ok(None),
         }
     }
 
     fn literal(&mut self) -> Result<Option<Value>, Error> {
         match self.current {
-            Some(Token::Integer(s, e, _)) => {
+            Token::Integer(s, e, _) => {
                 self.advance();
                 let int = str::parse::<i32>(self.scanner.source_slice(s, e)).unwrap();
                 Ok(Some(Value::Integer(int)))
             }
-            Some(Token::String(s, e, _)) => {
+            Token::String(s, e, _) => {
                 self.advance();
                 let string = self.scanner.source_slice(s, e);
                 Ok(Some(Value::String(String::from(string))))
             }
-            Some(Token::Float64(s, e, _)) => {
+            Token::Float64(s, e, _) => {
                 self.advance();
                 let float = str::parse::<f64>(self.scanner.source_slice(s, e)).unwrap();
                 Ok(Some(Value::Float(float)))
             }
-            Some(Token::True(_, _, _)) => {
+            Token::True(_, _, _) => {
                 self.advance();
                 Ok(Some(Value::Boolean(true)))
             }
-            Some(Token::False(_, _, _)) => {
+            Token::False(_, _, _) => {
                 self.advance();
                 Ok(Some(Value::Boolean(false)))
             }
-            Some(Token::Null(_, _, _)) => {
+            Token::Null(_, _, _) => {
                 self.advance();
                 Ok(Some(Value::Null))
             }
-            Some(Token::Error(msg, s, e, l)) => Err(Error(msg, s, e, l)),
-            None | Some(_) => Ok(None),
+            Token::Error(msg, s, e, l) => Err(Error(msg, s, e, l)),
+            _ => Ok(None),
         }
     }
 
@@ -158,7 +158,7 @@ impl<'a> Parser<'a> {
 
         match name {
             Some(n) => match self.current {
-                Some(Token::Equal(s, e, l)) => {
+                Token::Equal(s, e, l) => {
                     self.advance();
 
                     let literal = self.literal()?;
@@ -168,17 +168,13 @@ impl<'a> Parser<'a> {
                         None => Err(Error("Expect literal after '='.", s, e, l)),
                     }
                 }
-                Some(ref t) => {
+                Token::Eof(s, e, l) => {
+                    return Err(Error("Unexpected identifier.", s, e, l));
+                }
+                ref t @ _ => {
                     let (start, end, line) = t.position();
                     return Err(Error("Expect '=' after attribute name.", start, end, line));
                 }
-                None => match self.previous {
-                    Some(ref p) => {
-                        let (start, end, line) = p.position();
-                        return Err(Error("Unexpected identifier.", start + 1, end + 1, line));
-                    }
-                    _ => Err(Error("Unexpected identifier.", 0, 0, 1)),
-                },
             },
             None => Ok(None),
         }
@@ -199,7 +195,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn none_error(&self, msg: &'static str) -> Error {
+    /* fn none_error(&self, msg: &'static str) -> Error {
         match self.previous {
             Some(ref p) => {
                 let (start, end, line) = p.position();
@@ -207,7 +203,7 @@ impl<'a> Parser<'a> {
             }
             _ => Error(msg, 0, 0, 1),
         }
-    }
+    } */
 
     fn tag_declaration(&mut self) -> Result<Tag, Error> {
         let identifier = self.identifier()?;
@@ -218,8 +214,11 @@ impl<'a> Parser<'a> {
 
                 loop {
                     match self.current {
-                        Some(Token::Semicolon(_, _, _)) | Some(Token::LeftBrace(_, _, _)) => break,
-                        Some(_) => {
+                        Token::Semicolon(_, _, _) | Token::LeftBrace(_, _, _) => break,
+                        Token::Eof(s, e, l) => {
+                            return Err(Error("Expect literal value or attribute.", s, e, l))
+                        }
+                        _ => {
                             let attr_or_literal = self.attribute_or_literal()?;
 
                             match attr_or_literal {
@@ -230,53 +229,67 @@ impl<'a> Parser<'a> {
                                     tag.values.push(value);
                                 }
                                 None => {
-                                    return Err(
-                                        self.none_error("Expect literal value or attribute.")
-                                    )
+                                    let (s, e, l) = self.current.position();
+                                    return Err(Error(
+                                        "Expect literal value or attribute.",
+                                        s,
+                                        e,
+                                        l,
+                                    ));
                                 }
                             }
                         }
-                        None => return Err(self.none_error("Expect literal value or attribute.")),
                     }
                 }
 
                 match self.current {
-                    Some(Token::Semicolon(_, _, _)) => {
+                    Token::Semicolon(s, e, l) => {
                         if tag.values.len() == 0 && tag.attributes.len() == 0 {
-                            return Err(self.none_error("Expect literal value or attribute."));
+                            return Err(Error("Expect literal value or attribute.", s, e, l));
                         }
 
                         self.advance();
                         Ok(tag)
                     }
-                    Some(Token::LeftBrace(_, _, _)) => {
+                    Token::LeftBrace(..) => {
                         self.advance();
                         loop {
                             match self.current {
-                                Some(Token::RightBrace(_, _, _)) => {
+                                Token::RightBrace(..) => {
                                     self.advance();
                                     break;
                                 }
-                                Some(_) => {
+                                Token::Eof(s, e, l) => {
+                                    return Err(Error("Expect '}' after tag body.", s, e, l))
+                                }
+                                _ => {
                                     let child_tag = self.tag_declaration()?;
                                     tag.children.push(child_tag);
                                 }
-                                None => return Err(self.none_error("Expect '}' after tag body.")),
                             }
                         }
 
                         Ok(tag)
                     }
-                    Some(_) | None => Err(self.none_error("Expect ';' or '{'.")),
+                    Token::Eof(s, e, l) => Err(Error("Expect ';' or '{'.", s, e, l)),
+                    _ => {
+                        let (s, e, l) = self.current.position();
+                        Err(Error("Expect ';' or '{'.", s, e, l))
+                    }
                 }
             }
-            None => Err(self.none_error("Expect identifier.")),
+            None => Err(Error("Expect identifier.", 0, 0, 1)),
         }
     }
 
-    fn advance(&mut self) -> Option<Token> {
-        let previous = self.current.take();
-        self.current = self.scanner.next();
+    fn advance(&mut self) -> Token {
+        let previous = self.current;
+        let span = cmp::min(0, self.scanner.source_length() - 2);
+        let line = self.scanner.curr_line();
+        self.current = self
+            .scanner
+            .next()
+            .unwrap_or(Token::Eof(span, span + 1, line));
         previous
     }
 
@@ -306,13 +319,16 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse(mut self) -> Vec<Tag> {
-        while self.current.is_some() {
-            match self.tag_declaration() {
-                Ok(tag) => self.tags.push(tag),
-                Err(Error(msg, start, end, line)) => {
-                    self.print_error(msg, start, end, line);
-                    break;
-                }
+        loop {
+            match self.current {
+                Token::Eof(..) => break,
+                _ => match self.tag_declaration() {
+                    Ok(tag) => self.tags.push(tag),
+                    Err(Error(msg, start, end, line)) => {
+                        self.print_error(msg, start, end, line);
+                        break;
+                    }
+                },
             }
         }
         self.tags

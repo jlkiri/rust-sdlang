@@ -5,7 +5,7 @@ type Index = usize;
 type Line = usize;
 type Char = (Index, char);
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Token {
     True(usize, usize, Line),
     False(usize, usize, Line),
@@ -19,7 +19,7 @@ pub enum Token {
     Identifier(usize, usize, Line),
     Float64(usize, usize, Line),
     Integer(usize, usize, Line),
-    Eof,
+    Eof(usize, usize, Line),
 }
 
 impl Token {
@@ -36,8 +36,8 @@ impl Token {
             | Token::Identifier(s, e, l)
             | Token::Float64(s, e, l)
             | Token::Integer(s, e, l)
+            | Token::Eof(s, e, l)
             | Token::Error(_, s, e, l) => (*s, *e, *l),
-            Token::Eof => (0, 0, 0),
         }
     }
 }
@@ -69,6 +69,10 @@ impl<'a> Scanner<'a> {
             line: 1,
             scanner,
         }
+    }
+
+    pub fn curr_line(&self) -> usize {
+        self.line
     }
 
     pub fn source_length(&self) -> usize {
