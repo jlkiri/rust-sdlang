@@ -101,13 +101,6 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /* fn consume(&mut self, token: Token, msg: &'static str) -> Result<Option<Token>, &str> {
-        match self.current {
-            t if t == token => Ok(self.advance()),
-            _ => Err(msg),
-        }
-    } */
-
     fn identifier(&mut self) -> Result<Option<String>, Error> {
         match self.current {
             Token::Identifier(s, e, _) => {
@@ -195,16 +188,6 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /* fn none_error(&self, msg: &'static str) -> Error {
-        match self.previous {
-            Some(ref p) => {
-                let (start, end, line) = p.position();
-                Error(msg, start + 1, end + 1, line)
-            }
-            _ => Error(msg, 0, 0, 1),
-        }
-    } */
-
     fn tag_declaration(&mut self) -> Result<Tag, Error> {
         let identifier = self.identifier()?;
 
@@ -278,7 +261,10 @@ impl<'a> Parser<'a> {
                     }
                 }
             }
-            None => Err(Error("Expect identifier.", 0, 0, 1)),
+            None => {
+                let (s, e, l) = self.current.position();
+                Err(Error("Expect identifier.", s, e, l))
+            }
         }
     }
 
